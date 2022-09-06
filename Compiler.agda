@@ -15,6 +15,7 @@ open Effectᴴ
 open import Agda.Primitive
 open import Relation.Binary.PropositionalEquality renaming ([_] to ≡[_])
 open ≡-Reasoning
+open import Data.List
 
 module Effects where
   open Universe ⦃ ... ⦄
@@ -68,9 +69,6 @@ module Effects where
   -- Ret (SetVar A) (getvar _) = A
   Ret (SetVar A) (setvar _ _) = ⊤
 
-  -- ‵getvar : ⦃ ε ∼ SetVar A ▸ ε′ ⦄ → String → Free ε A
-  -- ‵getvar ⦃ w ⦄ v = impure (inj▸ₗ (getvar v)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
-
   ‵setvar : ⦃ ε ∼ SetVar A ▸ ε′ ⦄ → String → A → Free ε ⊤
   ‵setvar ⦃ w ⦄ v x = impure (inj▸ₗ (setvar v x)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
 
@@ -112,36 +110,34 @@ data Env : Set where
 
 open Alg
 
-id_Alg : Alg H (Hefty H)
-alg id_Alg op ψ k = impure op ψ k
+-- uniquify_Alg : ⦃ w₁ : H ∼ (Let A) ▹ H′ ⦄ ⦃ w₂ : H ∼ Lift (Var A) ▹ H″ ⦄ → Alg H (λ x → List String → Hefty H x)
+-- alg (uniquify_Alg ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = case▹≡ ⦃ w₁ ⦄ op
+--   (λ { (letvar v) pf env → impure {!inj▹ₗ ⦃ w₁ ⦄ (letvar "test")!} (λ x → ψ x (v ∷ env)) (λ x → k x env) } )
+--   (λ _ _ → case▹≡ ⦃ w₂ ⦄ op
+--     (λ { (var v) pf env → {!!} })
+--     λ _ _ env → impure op (λ x → ψ x env) (λ x → k x env))
 
-coerce : { B : Set } → A → A ≡ B → B
-coerce x refl = x
-
--- Note: this has strict semantics
--- assumes unique variables
-let2set_Alg : ⦃ w₁ : H ∼ (Let ℤ) ▹ H′ ⦄ ⦃ w₂ : H″ ∼ (Lift (SetVar ℤ)) ▹ H′ ⦄ → Alg H (Hefty H″)
-alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = case▹≡ ⦃ w₁ ⦄ op
-  (λ{ (letvar v) pf →
+handle▹ : {H H′ H″ H₀ : Effectᴴ} ⦃ w₁ : H ∼ H₀ ▹ H′ ⦄ → Alg H₀ (Hefty H″) → Alg H′ (Hefty H″) → Alg H (Hefty H″)
+alg (handle▹ {H} {H′} {H″} {H₀} ⦃ w ⦄ α β) op ψ k = case▹≡ ⦃ w ⦄ op
+  (λ op′ pf →
     let
       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
         (begin
           Fork H op
         ≡⟨ cong (Fork H) pf ⟩
-          Fork H (inj▹ₗ (letvar v))
-        ≡⟨ inj▹ₗ-fork≡ ⦃ w₁ ⦄ (letvar v) ⟩
-          Fork (Let ℤ) (letvar v)
+          Fork H (inj▹ₗ op′)
+        ≡⟨ inj▹ₗ-fork≡ ⦃ w ⦄ op′ ⟩
+          Fork H₀ op′
         ∎) ψ
       k′ = subst (λ x → x → Hefty H″ _)
         (begin
           Ret H op
         ≡⟨ cong (Ret H) pf ⟩
-          Ret H (inj▹ₗ (letvar v))
-        ≡⟨ inj▹ₗ-ret≡ ⦃ w₁ ⦄ (letvar v) ⟩
-          Ret (Let ℤ) (letvar v)
+          Ret H (inj▹ₗ op′)
+        ≡⟨ inj▹ₗ-ret≡ ⦃ w ⦄ op′ ⟩
+          Ret H₀ op′
         ∎) k
-    in ψ′ false >>= λ x → (↑ (setvar v x)) >>= λ _ → ψ′ true >>= λ y → k′ y
-    })
+    in alg α op′ ψ′ k′)
   (λ op′ pf →
     let
       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
@@ -149,22 +145,71 @@ alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = ca
           Fork H op
         ≡⟨ cong (Fork H) pf ⟩
           Fork H (inj▹ᵣ op′)
-        ≡⟨ inj▹ᵣ-fork≡ ⦃ w₁ ⦄ op′ ⟩
+        ≡⟨ inj▹ᵣ-fork≡ ⦃ w ⦄ op′ ⟩
           Fork H′ op′
-        ≡⟨ sym $ inj▹ᵣ-fork≡ ⦃ w₂ ⦄ op′ ⟩
-          Fork H″ (inj▹ᵣ op′)
         ∎) ψ
       k′ = subst (λ x → x → Hefty H″ _)
         (begin
           Ret H op
         ≡⟨ cong (Ret H) pf ⟩
           Ret H (inj▹ᵣ op′)
-        ≡⟨ inj▹ᵣ-ret≡ ⦃ w₁ ⦄ op′ ⟩
+        ≡⟨ inj▹ᵣ-ret≡ ⦃ w ⦄ op′ ⟩
           Ret H′ op′
-        ≡⟨ (sym $ inj▹ᵣ-ret≡ ⦃ w₂ ⦄ op′) ⟩
-          Ret H″ (inj▹ᵣ op′)
         ∎) k
-    in impure (inj▹ᵣ op′) ψ′ k′ )
+    in alg β op′ ψ′ k′)
+
+-- Note: this has strict semantics
+-- assumes unique variables
+let2set_Alg : ⦃ w₁ : H ∼ (Let ℤ) ▹ H′ ⦄ ⦃ w₂ : H″ ∼ (Lift (SetVar ℤ)) ▹ H′ ⦄ → Alg H (Hefty H″)
+let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄ = handle▹ ⦃ w₁ ⦄
+  (record { alg = λ { (letvar v) ψ k → ψ false >>= λ x → (↑ (setvar v x)) >>= λ _ → ψ true >>= λ y → k y } })
+  (record { alg = λ op ψ k → impure (inj▹ᵣ op)
+    (subst (λ x → (s : Op x) → Hefty H″ (Ret x s)) (sym $ inj▹ᵣ-fork≡ ⦃ w₂ ⦄ op) ψ)
+    (subst (λ x → x → Hefty H″ _) (sym $ inj▹ᵣ-ret≡ ⦃ w₂ ⦄ op) k) })
+
+--   (λ{ (letvar v) pf →
+--     let
+--       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
+--         (begin
+--           Fork H op
+--         ≡⟨ cong (Fork H) pf ⟩
+--           Fork H (inj▹ₗ (letvar v))
+--         ≡⟨ inj▹ₗ-fork≡ ⦃ w₁ ⦄ (letvar v) ⟩
+--           Fork (Let ℤ) (letvar v)
+--         ∎) ψ
+--       k′ = subst (λ x → x → Hefty H″ _)
+--         (begin
+--           Ret H op
+--         ≡⟨ cong (Ret H) pf ⟩
+--           Ret H (inj▹ₗ (letvar v))
+--         ≡⟨ inj▹ₗ-ret≡ ⦃ w₁ ⦄ (letvar v) ⟩
+--           Ret (Let ℤ) (letvar v)
+--         ∎) k
+--     in ψ′ false >>= λ x → (↑ (setvar v x)) >>= λ _ → ψ′ true >>= λ y → k′ y
+--     })
+--   (λ op′ pf →
+--     let
+--       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
+--         (begin
+--           Fork H op
+--         ≡⟨ cong (Fork H) pf ⟩
+--           Fork H (inj▹ᵣ op′)
+--         ≡⟨ inj▹ᵣ-fork≡ ⦃ w₁ ⦄ op′ ⟩
+--           Fork H′ op′
+--         ≡⟨ sym $ inj▹ᵣ-fork≡ ⦃ w₂ ⦄ op′ ⟩
+--           Fork H″ (inj▹ᵣ op′)
+--         ∎) ψ
+--       k′ = subst (λ x → x → Hefty H″ _)
+--         (begin
+--           Ret H op
+--         ≡⟨ cong (Ret H) pf ⟩
+--           Ret H (inj▹ᵣ op′)
+--         ≡⟨ inj▹ᵣ-ret≡ ⦃ w₁ ⦄ op′ ⟩
+--           Ret H′ op′
+--         ≡⟨ (sym $ inj▹ᵣ-ret≡ ⦃ w₂ ⦄ op′) ⟩
+--           Ret H″ (inj▹ᵣ op′)
+--         ∎) k
+--     in impure (inj▹ᵣ op′) ψ′ k′ )
 
 -- TODO:
 --  [x] Weaken let2set_Alg
