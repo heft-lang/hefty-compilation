@@ -1,0 +1,3 @@
+name: hefty-compilation
+depend: standard-library
+include: .
