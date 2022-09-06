@@ -228,6 +228,7 @@ module HeftyModule where
       (pure ∘ proj-ret▹ₗ ⦃ w ⦄)
 
   record Alg (H : Effectᴴ) (G : Set → Set) : Set₁ where
+    constructor mkAlg
     field alg  :  (op  : Op H)
                   (ψ   : (s : Op (Fork H op)) → G (Ret (Fork H op) s))
                   (k   : Ret H op → G A)
