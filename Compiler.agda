@@ -3,6 +3,7 @@ module Compiler where
 open import Data.Integer using ( ℤ ; _-_ ; -_ ; _+_ )
 open import Data.String using ( String )
 open import Data.Unit
+open import Data.Bool hiding ( T )
 open import Data.Product
 open import Function
 open import Hefty
@@ -41,21 +42,21 @@ module Effects where
   ‵askvar : ⦃ w : ε ∼ Var A ▸ ε′ ⦄ → String → Free ε A
   ‵askvar ⦃ w ⦄ v = impure (inj▸ₗ (var v)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
 
-  data LetOp : Set where
-    letvar : String → LetOp
+  data LetOp (T : Set) : Set where
+    letvar : { T } → String → LetOp T
 
-  Let : Set → Effectᴴ
-  Op     (Let _) = LetOp
-  Fork   (Let A) (letvar _)  = record
-    { Op = ⊤; Ret = λ _ → A }
-  Ret    (Let _) (letvar _)  = ⊤
+  Let : ⦃ u : Universe ⦄ → Set → Effectᴴ
+  Op     (Let _) = LetOp T
+  Fork   (Let A) (letvar {t} _)  = record
+    { Op = Bool; Ret = λ { false → A; true → ⟦ t ⟧ } }
+  Ret    (Let _) (letvar {t} _)  = ⟦ t ⟧
 
-  ‵letvar   : ⦃ w : H ∼ (Let A) ▹ H′ ⦄
-           → String → Hefty H A  → Hefty H ⊤
-  ‵letvar ⦃ w = w ⦄ v m  =
+  ‵letvar   : ⦃ u : Universe ⦄ ⦃ w : H ∼ (Let A) ▹ H′ ⦄ {t : T}
+           → String → Hefty H A → Hefty H ⟦ t ⟧ → Hefty H ⟦ t ⟧
+  ‵letvar ⦃ w = w ⦄ v m₁ m₂ =
     impure
       (inj▹ₗ (letvar v))
-      (proj-fork▹ₗ ⦃ w ⦄ (λ _ → m))
+      (proj-fork▹ₗ ⦃ w ⦄ (λ { false → m₁; true → m₂ }))
       (pure ∘ proj-ret▹ₗ ⦃ w ⦄)
 
   data SetVarOp (A : Set) : Set where
@@ -107,7 +108,7 @@ data Env : Set where
 ⟦ LAdd x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → pure (x + y)
 ⟦ LSub x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → pure (x - y)
 ⟦ LVar v ⟧ =  ↑ (var v)
-⟦ LLet v x y ⟧ =  ‵letvar v ⟦ x ⟧ >>= λ _ → ⟦ y ⟧
+⟦ LLet v x y ⟧ =  ‵letvar v ⟦ x ⟧ ⟦ y ⟧
 
 open Alg
 
@@ -117,9 +118,8 @@ alg id_Alg op ψ k = impure op ψ k
 coerce : { B : Set } → A → A ≡ B → B
 coerce x refl = x
 
--- let2set_Alg : ⦃ w₁ : H ∼ H₀ ▹ H′ ⦄ → Alg H (Hefty (H′ ∔ H″)
-
 -- Note: this has strict semantics
+-- assumes unique variables
 let2set_Alg : ⦃ w₁ : H ∼ (Let ℤ) ▹ H′ ⦄ ⦃ w₂ : H″ ∼ (Lift (SetVar ℤ)) ▹ H′ ⦄ → Alg H (Hefty H″)
 alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = case▹≡ ⦃ w₁ ⦄ op
   (λ{ (letvar v) pf →
@@ -127,7 +127,7 @@ alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = ca
       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
         (begin
           Fork H op
-        ≡⟨ cong _ pf ⟩
+        ≡⟨ cong (Fork H) pf ⟩
           Fork H (inj▹ₗ (letvar v))
         ≡⟨ inj▹ₗ-fork≡ ⦃ w₁ ⦄ (letvar v) ⟩
           Fork (Let ℤ) (letvar v)
@@ -135,19 +135,19 @@ alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = ca
       k′ = subst (λ x → x → Hefty H″ _)
         (begin
           Ret H op
-        ≡⟨ cong _ pf ⟩
+        ≡⟨ cong (Ret H) pf ⟩
           Ret H (inj▹ₗ (letvar v))
         ≡⟨ inj▹ₗ-ret≡ ⦃ w₁ ⦄ (letvar v) ⟩
           Ret (Let ℤ) (letvar v)
         ∎) k
-    in ψ′ tt >>= λ x → (↑ (setvar v x)) >>= λ _ → k′ tt
+    in ψ′ false >>= λ x → (↑ (setvar v x)) >>= λ _ → ψ′ true >>= λ y → k′ y
     })
   (λ op′ pf →
     let
       ψ′ = subst (λ x → (s : Op x) → Hefty H″ (Ret x s))
         (begin
           Fork H op
-        ≡⟨ cong _ pf ⟩
+        ≡⟨ cong (Fork H) pf ⟩
           Fork H (inj▹ᵣ op′)
         ≡⟨ inj▹ᵣ-fork≡ ⦃ w₁ ⦄ op′ ⟩
           Fork H′ op′
@@ -157,7 +157,7 @@ alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = ca
       k′ = subst (λ x → x → Hefty H″ _)
         (begin
           Ret H op
-        ≡⟨ cong _ pf ⟩
+        ≡⟨ cong (Ret H) pf ⟩
           Ret H (inj▹ᵣ op′)
         ≡⟨ inj▹ᵣ-ret≡ ⦃ w₁ ⦄ op′ ⟩
           Ret H′ op′
@@ -167,12 +167,13 @@ alg (let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = ca
     in impure (inj▹ᵣ op′) ψ′ k′ )
 
 -- TODO:
---  * Weaken let2set_Alg
---  * How to do uniquify? Try de Bruijn + readable names
---  * More types than just ℤ (Intrinsically typed AST?)
---  * Stack allocation → X86
---  * Bigger language (e.g. if statement)
---  * Correctness proofs
+--  [x] Weaken let2set_Alg
+--  [x] Change let to have two higher-order arguments
+--  [ ] Uniquify variables, try de Bruijn + readable names
+--  [ ] More types than just ℤ (Intrinsically typed AST?)
+--  [ ] Stack allocation → X86
+--  [ ] Bigger language (e.g. if statement)
+--  [ ] Correctness proofs
 
 data Atom : Set where
   AInt : ℤ → Atom
