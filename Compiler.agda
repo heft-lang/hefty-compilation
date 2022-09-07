@@ -1,7 +1,8 @@
 module Compiler where
 
 open import Data.Integer using ( ℤ ; _-_ ; -_ ; _+_ )
-open import Data.String using ( String )
+open import Data.Nat.Show using ( show )
+open import Data.String using (String ; _==_ ; _++_ )
 open import Data.Unit
 open import Data.Bool hiding ( T )
 open import Data.Product
@@ -15,13 +16,30 @@ open Effectᴴ
 open import Agda.Primitive
 open import Relation.Binary.PropositionalEquality renaming ([_] to ≡[_])
 open ≡-Reasoning
-open import Data.List
+open import Data.List hiding ( _++_ )
 
 module Effects where
   open Universe ⦃ ... ⦄
 
   variable
     A : Set
+
+  -- Arith
+
+  data ArithOp : Set where
+    int : ℤ → ArithOp
+    neg : ℤ → ArithOp
+    add : ℤ → ℤ → ArithOp
+    sub : ℤ → ℤ → ArithOp
+
+  Arith : Effect
+  Op  Arith           = ArithOp
+  Ret Arith (int n)   = ℤ
+  Ret Arith (neg x)   = ℤ
+  Ret Arith (add x y) = ℤ
+  Ret Arith (sub x y) = ℤ
+
+  -- Read
 
   data ReadOp : Set where
     read : ReadOp
@@ -33,6 +51,8 @@ module Effects where
   ‵read : ⦃ ε ∼ Read ▸ ε′ ⦄ → Free ε ℤ
   ‵read ⦃ w ⦄ = impure (inj▸ₗ read) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
 
+  -- Var
+
   data VarOp : Set where
     var : String → VarOp
 
@@ -40,8 +60,10 @@ module Effects where
   Op (Var T) = VarOp
   Ret (Var T) (var _) = T
 
-  ‵askvar : ⦃ w : ε ∼ Var A ▸ ε′ ⦄ → String → Free ε A
-  ‵askvar ⦃ w ⦄ v = impure (inj▸ₗ (var v)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
+  ‵var : ⦃ w : ε ∼ Var A ▸ ε′ ⦄ → String → Free ε A
+  ‵var ⦃ w ⦄ v = impure (inj▸ₗ (var v)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
+
+  -- Let
 
   data LetOp (T : Set) : Set where
     letvar : { T } → String → LetOp T
@@ -60,17 +82,17 @@ module Effects where
       (proj-fork▹ₗ ⦃ w ⦄ (λ { false → m₁; true → m₂ }))
       (pure ∘ proj-ret▹ₗ ⦃ w ⦄)
 
-  data SetVarOp (A : Set) : Set where
-    -- getvar : String → SetVarOp A
-    setvar : String → A → SetVarOp A
+  -- Assign
 
-  SetVar : Set → Effect
-  Op (SetVar A) = SetVarOp A
-  -- Ret (SetVar A) (getvar _) = A
-  Ret (SetVar A) (setvar _ _) = ⊤
+  data AssignOp (A : Set) : Set where
+    assign : String → A → AssignOp A
 
-  ‵setvar : ⦃ ε ∼ SetVar A ▸ ε′ ⦄ → String → A → Free ε ⊤
-  ‵setvar ⦃ w ⦄ v x = impure (inj▸ₗ (setvar v x)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
+  Assign : Set → Effect
+  Op (Assign A) = AssignOp A
+  Ret (Assign A) (assign _ _) = ⊤
+
+  ‵assign : ⦃ ε ∼ Assign A ▸ ε′ ⦄ → String → A → Free ε ⊤
+  ‵assign ⦃ w ⦄ v x = impure (inj▸ₗ (assign v x)) (pure ∘ proj-ret▸ₗ ⦃ w ⦄)
 
 private
   data Type : Set where
@@ -99,70 +121,49 @@ data LExp : Set where
 
 data Env : Set where
 
-⟦_⟧ : ⦃ wᵣ : H ∼ Lift Read ▹ H′ ⦄ ⦃ wₜ : H ∼ (Let ℤ) ▹ H″ ⦄ ⦃ wₐ : H ∼ Lift (Var ℤ) ▹ H‴ ⦄ → LExp → Hefty H ℤ
-⟦ LInt n ⟧ = pure n
+⟦_⟧ :
+  ⦃ w₁ : H ∼ Lift Arith ▹ H₁ ⦄
+  ⦃ w₂ : H ∼ Lift Read ▹ H₂ ⦄
+  ⦃ w₃ : H ∼ (Let ℤ) ▹ H₃ ⦄
+  ⦃ w₄ : H ∼ Lift (Var ℤ) ▹ H₄ ⦄ →
+  LExp → Hefty H ℤ
+⟦ LInt n ⟧ = ↑ (int n)
 ⟦ LRead ⟧ = ↑ read
-⟦ LNeg x ⟧ = ⟦ x ⟧ >>= λ x → pure (- x)
-⟦ LAdd x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → pure (x + y)
-⟦ LSub x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → pure (x - y)
+⟦ LNeg x ⟧ = ⟦ x ⟧ >>= λ x → ↑ (neg x)
+⟦ LAdd x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → ↑ (add x y)
+⟦ LSub x y ⟧ = ⟦ x ⟧ >>= λ x → ⟦ y ⟧ >>= λ y → ↑ (sub x y)
 ⟦ LVar v ⟧ =  ↑ (var v)
 ⟦ LLet v x y ⟧ =  ‵letvar v ⟦ x ⟧ ⟦ y ⟧
 
 open Alg
 
--- uniquify_Alg : ⦃ w₁ : H ∼ (Let A) ▹ H′ ⦄ ⦃ w₂ : H ∼ Lift (Var A) ▹ H″ ⦄ → Alg H (λ x → List String → Hefty H x)
--- alg (uniquify_Alg ⦃ w₁ ⦄ ⦃ w₂ ⦄) op ψ k = case▹≡ ⦃ w₁ ⦄ op
---   (λ { (letvar v) pf env → impure {!inj▹ₗ ⦃ w₁ ⦄ (letvar "test")!} (λ x → ψ x (v ∷ env)) (λ x → k x env) } )
---   (λ _ _ → case▹≡ ⦃ w₂ ⦄ op
---     (λ { (var v) pf env → {!!} })
---     λ _ _ env → impure op (λ x → ψ x env) (λ x → k x env))
+weakenᵣ : { F : Set → Set } ⦃ w : H ∼ H₀ ▹ H′ ⦄ → Alg H F → Alg H′ F
+alg (weakenᵣ {_} {_} {_} {F} α) op ψ k = alg α
+  (inj▹ᵣ op)
+  (subst (λ x → (s : Op x) → F (Ret x s)) (sym $ inj▹ᵣ-fork≡ op) ψ)
+  (subst (λ x → x → F _) (sym $ inj▹ᵣ-ret≡ op) k)
 
-handle▹ : {H H′ H₀ : Effectᴴ} {F : Set → Set} ⦃ w₁ : H ∼ H₀ ▹ H′ ⦄ → Alg H₀ F → Alg H′ F → Alg H F
-alg (handle▹ {H} {H′} {H₀} {F} ⦃ w ⦄ α β) op ψ k = case▹≡ ⦃ w ⦄ op
-  (λ op′ pf →
-    let
-      ψ′ = subst (λ x → (s : Op x) → F (Ret x s))
-        (begin
-          Fork H op
-        ≡⟨ cong (Fork H) pf ⟩
-          Fork H (inj▹ₗ op′)
-        ≡⟨ inj▹ₗ-fork≡ ⦃ w ⦄ op′ ⟩
-          Fork H₀ op′
-        ∎) ψ
-      k′ = subst (λ x → x → F _)
-        (begin
-          Ret H op
-        ≡⟨ cong (Ret H) pf ⟩
-          Ret H (inj▹ₗ op′)
-        ≡⟨ inj▹ₗ-ret≡ ⦃ w ⦄ op′ ⟩
-          Ret H₀ op′
-        ∎) k
-    in alg α op′ ψ′ k′)
-  (λ op′ pf →
-    let
-      ψ′ = subst (λ x → (s : Op x) → F (Ret x s))
-        (begin
-          Fork H op
-        ≡⟨ cong (Fork H) pf ⟩
-          Fork H (inj▹ᵣ op′)
-        ≡⟨ inj▹ᵣ-fork≡ ⦃ w ⦄ op′ ⟩
-          Fork H′ op′
-        ∎) ψ
-      k′ = subst (λ x → x → F _)
-        (begin
-          Ret H op
-        ≡⟨ cong (Ret H) pf ⟩
-          Ret H (inj▹ᵣ op′)
-        ≡⟨ inj▹ᵣ-ret≡ ⦃ w ⦄ op′ ⟩
-          Ret H′ op′
-        ∎) k
-    in alg β op′ ψ′ k′)
+gensym : List String → String → String
+gensym xs x with length (filterᵇ (x ==_) xs)
+... | 0 = x
+... | n = x ++ show n
+
+-- Only uniquifies variables that occur in the same scope (i.e. those that would be shadowed)
+uniquify_Alg :
+  ⦃ w₁ : H ∼ (Let A) ▹ H′ ⦄ ⦃ w₂ : H′ ∼ Lift (Var A) ▹ H″ ⦄ ⦃ w₃ : H ∼ Lift (Var A) ▹ H‴ ⦄ →
+  Alg H (λ x → List String → Hefty H x)
+uniquify_Alg ⦃ w₁ ⦄ ⦃ w₂ ⦄ ⦃ w₃ ⦄ =
+  handle▹ ⦃ w₁ ⦄
+    (mkAlg λ { (letvar v) ψ k env → ‵letvar (gensym env v) (ψ false env) (ψ true (v ∷ env)) >>= λ x → k x env })
+    (handle▹ ⦃ w₂ ⦄
+      (mkAlg λ { (var v) _ k env → (↑_ ⦃ w₃ ⦄ (var (gensym env v))) >>= λ x → k x env })
+      (weakenᵣ ⦃ w₂ ⦄ (weakenᵣ ⦃ w₁ ⦄ (mkAlg λ op ψ k env → impure op (λ x → ψ x env) (λ x → k x env)))))
 
 -- Note: this has strict semantics
 -- assumes unique variable names
-let2set_Alg : ⦃ w₁ : H ∼ (Let ℤ) ▹ H′ ⦄ ⦃ w₂ : H″ ∼ (Lift (SetVar ℤ)) ▹ H′ ⦄ → Alg H (Hefty H″)
+let2set_Alg : ⦃ w₁ : H ∼ (Let ℤ) ▹ H′ ⦄ ⦃ w₂ : H″ ∼ (Lift (Assign ℤ)) ▹ H′ ⦄ → Alg H (Hefty H″)
 let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄ = handle▹ ⦃ w₁ ⦄
-  (mkAlg (λ { (letvar v) ψ k → ψ false >>= λ x → (↑ (setvar v x)) >>= λ _ → ψ true >>= λ y → k y } ))
+  (mkAlg (λ { (letvar v) ψ k → ψ false >>= λ x → (↑ (assign v x)) >>= λ _ → ψ true >>= λ y → k y } ))
   (mkAlg (λ op ψ k → impure (inj▹ᵣ op)
     (subst (λ x → (s : Op x) → Hefty H″ (Ret x s)) (sym $ inj▹ᵣ-fork≡ ⦃ w₂ ⦄ op) ψ)
     (subst (λ x → x → Hefty H″ _) (sym $ inj▹ᵣ-ret≡ ⦃ w₂ ⦄ op) k) ))
@@ -170,28 +171,28 @@ let2set_Alg { H } { H′ } { H″ } ⦃ w₁ ⦄ ⦃ w₂ ⦄ = handle▹ ⦃ w�
 -- TODO:
 --  [x] Weaken let2set_Alg
 --  [x] Change let to have two higher-order arguments
---  [ ] Uniquify variables, try de Bruijn + readable names
---  [ ] More types than just ℤ (Intrinsically typed AST?)
+--  [x] Split out common structure of let2set_Alg
+--  [x] Uniquify variables
 --  [ ] Stack allocation → X86
+--  [ ] More types than just ℤ (Intrinsically typed AST?)
 --  [ ] Bigger language (e.g. if statement)
 --  [ ] Correctness proofs
 
-data Atom : Set where
-  AInt : ℤ → Atom
-  AVar : String → Atom
 
-data CExp : Set where
-  CAtom : Atom → CExp
-  CRead : CExp
-  CNeg  : Atom → CExp
-  CAdd  : Atom → Atom → CExp
-  CSub  : Atom → Atom → CExp
-
-data Stmt : Set where
-  Assign : String → CExp → Stmt
-
-data CVar : Set where
-  Seq : Stmt → CVar → CVar
-  Return : CExp → CVar
-
-
+-- data Atom : Set where
+--   AInt : ℤ → Atom
+--   AVar : String → Atom
+--
+-- data CExp : Set where
+--   CAtom : Atom → CExp
+--   CRead : CExp
+--   CNeg  : Atom → CExp
+--   CAdd  : Atom → Atom → CExp
+--   CSub  : Atom → Atom → CExp
+--
+-- data Stmt : Set where
+--   Assign : String → CExp → Stmt
+--
+-- data CVar : Set where
+--   Seq : Stmt → CVar → CVar
+--   Return : CExp → CVar
