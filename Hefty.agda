@@ -20,6 +20,8 @@ open import Data.List.Relation.Unary.Any using (here; there)
 open import Relation.Binary.PropositionalEquality renaming ([_] to ≡[_])
 open import Data.Product hiding (_,_)
 
+open ≡-Reasoning
+
 open Abbreviation using (hThrow; ♯_)
 
 module HeftyModule where
@@ -69,6 +71,26 @@ module HeftyModule where
 
             sift▹ : ⦃ H ∼ H₀ ▹ H′ ⦄  →  (H₁ ∔ H)   ∼ H₀ ▹ (H₁ ∔ H′)
             sift▹ ⦃ w ⦄ = sift w
+
+  postulate HX HY HZ : Effectᴴ
+
+  HS : Effectᴴ
+  HS = (HX ∔ (HY ∔ HZ))
+
+  x : HS ∼ HY ▹ (HX ∔ HZ)
+  x = sift insert
+
+  y : HS ∼ HX ▹ (HY ∔ HZ)
+  y = insert
+
+  -- test▹ : ⦃ w₁ : H ∼ H₀ ▹ H′ ⦄ ⦃ w₂ : H ∼ H₁ ▹ H″ ⦄ → H′ ∼
+  -- test▹ ⦃ insert ⦄ ⦃ sift insert ⦄ = record { fst = _ ; snd = {!!} }
+  -- test▹ ⦃ _ ⦄ ⦃ _ ⦄ = ?
+
+  -- trans▹ : { H H′ H″ H₀ H₁ : Effectᴴ } → (H ∼ H₀ ▹ H′) → (H′ ∼ H₁ ▹ H″) → Σ Effectᴴ (λ x → H ∼ H₁ ▹ x)
+  -- trans▹ {H} {H′} {H″} {H₀} {H₁} insert w₂ = record { fst = H₀ ∔ H″ ; snd = sift w₂ }
+  -- trans▹ {H} {H′} {H″} {H₀} {H₁} (sift w₁) insert = ?
+  -- trans▹ {H} {H′} {H″} {H₀} {H₁} (sift w₁) (sift w₂) = ?
 
   inj▹ₗ  :  ⦃ H ∼ H₀ ▹ H′ ⦄ → Op H₀  → Op H
   inj▹ᵣ  :  ⦃ H ∼ H₀ ▹ H′ ⦄ → Op H′  → Op H
@@ -234,6 +256,47 @@ module HeftyModule where
                   (k   : Ret H op → G A)
                →  G A
   open Alg
+
+  handle▹ : {H H′ H₀ : Effectᴴ} {F : Set → Set} ⦃ w₁ : H ∼ H₀ ▹ H′ ⦄ → Alg H₀ F → Alg H′ F → Alg H F
+  alg (handle▹ {H} {H′} {H₀} {F} ⦃ w ⦄ α β) op ψ k = case▹≡ ⦃ w ⦄ op
+    (λ op′ pf →
+      let
+        ψ′ = subst (λ x → (s : Op x) → F (Ret x s))
+          (begin
+            Fork H op
+          ≡⟨ cong (Fork H) pf ⟩
+            Fork H (inj▹ₗ op′)
+          ≡⟨ inj▹ₗ-fork≡ ⦃ w ⦄ op′ ⟩
+            Fork H₀ op′
+          ∎) ψ
+        k′ = subst (λ x → x → F _)
+          (begin
+            Ret H op
+          ≡⟨ cong (Ret H) pf ⟩
+            Ret H (inj▹ₗ op′)
+          ≡⟨ inj▹ₗ-ret≡ ⦃ w ⦄ op′ ⟩
+            Ret H₀ op′
+          ∎) k
+      in alg α op′ ψ′ k′)
+    (λ op′ pf →
+      let
+        ψ′ = subst (λ x → (s : Op x) → F (Ret x s))
+          (begin
+            Fork H op
+          ≡⟨ cong (Fork H) pf ⟩
+            Fork H (inj▹ᵣ op′)
+          ≡⟨ inj▹ᵣ-fork≡ ⦃ w ⦄ op′ ⟩
+            Fork H′ op′
+          ∎) ψ
+        k′ = subst (λ x → x → F _)
+          (begin
+            Ret H op
+          ≡⟨ cong (Ret H) pf ⟩
+            Ret H (inj▹ᵣ op′)
+          ≡⟨ inj▹ᵣ-ret≡ ⦃ w ⦄ op′ ⟩
+            Ret H′ op′
+          ∎) k
+      in alg β op′ ψ′ k′)
 
   cataᴴ : (∀ {A} → A → F A) → Alg H F → Hefty H A → F A
   cataᴴ g a (pure x)         = g x
