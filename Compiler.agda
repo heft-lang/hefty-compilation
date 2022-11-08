@@ -11,9 +11,9 @@ open import Data.Bool hiding ( T )
 open import Data.Product
 open import Function
 open import Hefty
-open HeftyModule
+open HeftyModule renaming (pure to return) hiding (_>>=_)
 open import Algebraic
-open FreeModule hiding ( _>>=_ ; _>>_ )
+open FreeModule hiding ( _>>=_ ; _>>_ ; pure )
 open Effect
 open Effectᴴ
 open import Agda.Primitive
@@ -23,8 +23,45 @@ open import Data.List hiding ( _++_ )
 open import Data.Empty
 open import Data.Maybe hiding ( _>>=_ )
 open import Effect.Functor
+open import Effect.Applicative
+open import Data.Sum
+open import Effect.Monad
 
 open Alg
+
+-- open RawFunctor ⦃ ... ⦄ public
+-- open RawApplicative ⦃ ... ⦄ public
+open RawMonad ⦃ ... ⦄ hiding (return) public
+
+mapHefty : ∀ {A B} → (A → B) → Hefty H A → Hefty H B
+mapHefty f (return x) = return (f x)
+mapHefty f (impure op ψ k) = impure op ψ (λ x → mapHefty f (k x))
+
+instance
+  HeftyFunctor : RawFunctor (Hefty H)
+  HeftyFunctor = record {_<$>_ = mapHefty}
+
+apHefty : ∀ {A B} → Hefty H (A → B) → Hefty H A → Hefty H B
+apHefty (return f) h = mapHefty f h
+apHefty (impure op ψ k) h = impure op ψ (λ x → apHefty (k x) h)
+
+instance
+  HeftyApplicative : RawApplicative (Hefty H)
+  HeftyApplicative = record
+    { pure = return
+    ; _⊛_ = apHefty
+    }
+
+bindHefty : ∀ {A B} → Hefty H A → (A → Hefty H B) → Hefty H B
+bindHefty (return x) f = f x
+bindHefty (impure op ψ k) f = impure op ψ (λ x → bindHefty (k x) f)
+
+instance
+  HeftyMonad : RawMonad (Hefty H)
+  HeftyMonad = record
+    { _>>=_ = bindHefty
+    ; return = return
+    }
 
 data Reg : Set where
   Rsp Rbp Rax Rbx Rcx Rdx Rsi Rdi : Reg
@@ -40,6 +77,12 @@ open _⊂_ ⦃ ... ⦄
 instance
   Refl⊂ : H ⊂ H
   _⊂_.weaken Refl⊂ = mkAlg impure
+
+Left⊂ : H ⊂ (H ∔ H₂)
+alg (_⊂_.weaken Left⊂) op ψ k = impure (inj₁ op) ψ k
+
+Right⊂ : H ⊂ (H₁ ∔ H)
+alg (_⊂_.weaken Right⊂) op ψ k = impure (inj₂ op) ψ k
 
 open Universe ⦃ ... ⦄
 
@@ -106,7 +149,7 @@ module Effects where
     impure
       (inj▹ₗ letop)
       (proj-fork▹ₗ ⦃ w ⦄ (λ { nothing → m₁; (just x) → m₂ x }))
-      (pure ∘ proj-ret▹ₗ ⦃ w ⦄)
+      (return ∘ proj-ret▹ₗ ⦃ w ⦄)
 
   -- X86Var
 
@@ -148,7 +191,6 @@ module Effects where
   Ret X86 (jmp _) = ⊤
   Ret X86 label = ⟦ lab ⟧
 
-
 open Effects
 
 data LExp ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ : Set where
@@ -174,106 +216,184 @@ data LExp ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ : Set where
 ⟦ LNeg x ⟧e = ⟦ x ⟧e >>= λ x → ↑ (neg x)
 ⟦ LAdd x y ⟧e = ⟦ x ⟧e >>= λ x → ⟦ y ⟧e >>= λ y → ↑ (add x y)
 ⟦ LSub x y ⟧e = ⟦ x ⟧e >>= λ x → ⟦ y ⟧e >>= λ y → ↑ (sub x y)
-⟦ LVar v ⟧e = pure v
+⟦ LVar v ⟧e = return v
 ⟦ LLet x f ⟧e = ‵let ⟦ x ⟧e (λ y → ⟦ f y ⟧e)
-
-weakenᵣ : { F : Set → Set } ⦃ w : H ∼ H₀ ▹ H′ ⦄ → Alg H F → Alg H′ F
-alg (weakenᵣ {F = F} α) op ψ k = alg α
-  (inj▹ᵣ op)
-  (subst (λ x → (s : Op x) → F (Ret x s)) (sym $ inj▹ᵣ-fork≡ op) ψ)
-  (subst (λ x → x → F _) (sym $ inj▹ᵣ-ret≡ op) k)
 
 -- Note: this has strict semantics
 let-Alg : ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ w₁ : H ∼ Let ▹ H′ ⦄ → Alg H (Hefty H′)
 let-Alg = handle▹
-  (mkAlg (λ { letop ψ k → ψ nothing >>= λ x → ψ (just x) >>= k } ))
-  (mkAlg impure)
+  (mkAlg λ { letop ψ k → ψ nothing >>= λ x → ψ (just x) >>= k })
+  weaken
 
 arith-Alg :
   { H⁗ : Effectᴴ } ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄
   ⦃ w₁ : H  ∼ Lift Arith  ▹ H″ ⦄
   ⦃ w₂ : H′ ∼ Lift X86Var ▹ H‴ ⦄
-  ⦃ w₃ : H′ ∼ Lift X86  ▹ H⁗ ⦄
+  ⦃ w₃ : H′ ∼ Lift X86    ▹ H⁗ ⦄
   ⦃ w₄ : H″ ⊂ H′ ⦄
   →
   Alg H (Hefty H′)
 arith-Alg ⦃ w₂ = w₂ ⦄ = handle▹
-  (mkAlg (λ {
-    (add x y) _ k → (↑ x86var) >>= λ z → (↑ (movq x z)) >>= λ _ → (↑ (addq y z)) >>= λ _ → k z ;
-    (sub x y) _ k → (↑ x86var) >>= λ z → (↑ (movq x z)) >>= λ _ → (↑ (subq y z)) >>= λ _ → k z ;
-    (neg x  ) _ k → (↑ x86var) >>= λ z → (↑ (movq x z)) >>= λ _ → (↑ (negq z))   >>= λ _ → k z
-  }))
+  (mkAlg λ {
+    (add x y) _ k → (↑ x86var) >>= λ z → (↑ movq x z) >>= λ _ → (↑ addq y z) >>= λ _ → k z ;
+    (sub x y) _ k → (↑ x86var) >>= λ z → (↑ movq x z) >>= λ _ → (↑ subq y z) >>= λ _ → k z ;
+    (neg x  ) _ k → (↑ x86var) >>= λ z → (↑ movq x z) >>= λ _ → (↑ negq z)   >>= λ _ → k z
+  })
   weaken
 
 read-Alg :
   { H⁗ : Effectᴴ } ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄
   ⦃ w₁ : H  ∼ Lift Read   ▹ H″ ⦄
   ⦃ w₂ : H′ ∼ Lift X86Var ▹ H‴ ⦄
-  ⦃ w₃ : H′ ∼ Lift X86  ▹ H⁗ ⦄
+  ⦃ w₃ : H′ ∼ Lift X86    ▹ H⁗ ⦄
   ⦃ w₄ : H″ ⊂ H′ ⦄
   →
   ⟦ lab ⟧ → Alg H (Hefty H′)
 read-Alg ⦃ w₂ = w₂ ⦄ read-int-lab = handle▹
-  (mkAlg (λ {
-    read _ k → (↑ x86var) >>= λ z → (↑ (callq read-int-lab)) >>= λ _ → (↑ (reg Rax)) >>= λ x → (↑ (movq x z)) >>= λ _ → k z
-  }))
+  (mkAlg λ {
+    read _ k → (↑ x86var) >>= λ z → (↑ callq read-int-lab) >>= λ _ → (↑ reg Rax) >>= λ x → (↑ movq x z) >>= λ _ → k z
+  })
   weaken
 
 -- Hefty H (F x) → F (Hefty H x)
 
-module CountVars where
-  open Universe ⦃ ... ⦄
+-- module CountVars where
+--   open Universe ⦃ ... ⦄
+--
+--   private
+--     instance
+--       UnitUniverse : Universe
+--       Universe.T UnitUniverse = ⊤
+--       Universe.⟦ UnitUniverse ⟧ tt = ⊤
+--
+--   private
+--     instance
+--       UnitHasVal : HasVal UnitUniverse
+--       HasVal.val UnitHasVal = tt
+--
+--   countVars-Alg :
+--     ⦃ H ∼ Lift X86Var ▹ H′ ⦄ →
+--     Alg H (λ _ → ℕ)
+--   countVars-Alg =
+--     handle▹ (mkAlg λ { x86var _ k → 1 + k tt }) ({!!})
+-- open CountVars using (countVars-Alg)
 
-  private
-    instance
-      UnitUniverse : Universe
-      Universe.T UnitUniverse = ⊤
-      Universe.⟦ UnitUniverse ⟧ tt = ⊤
-
-  private
-    instance
-      UnitHasVal : HasVal UnitUniverse
-      HasVal.val UnitHasVal = tt
-
-  countVars-Alg :
-    ⦃ H ∼ Lift X86Var ▹ H′ ⦄ →
-    Alg H (λ _ → ℕ)
-  countVars-Alg =
-    handle▹ (mkAlg λ { x86var _ k → 1 + k tt }) ({!!})
-open CountVars using (countVars-Alg)
-
-module TraverseModule where
-  open RawFunctor ⦃ ... ⦄
-
-  data Env : Set where
+module NatUniverse where
+  -- open RawFunctor ⦃ ... ⦄
 
   NatUniverse : Universe
   Universe.T NatUniverse = ⊤
   Universe.⟦ NatUniverse ⟧ tt = ℕ
 
-  private
-    instance
+  instance
       NatHasVal : HasVal NatUniverse
       HasVal.val NatHasVal = tt
 
-  private
-    instance
+  instance
       NatHasLab : HasLabel NatUniverse
       HasLabel.lab NatHasLab = tt
 
-  record Traverse (H : (u : Universe) → ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄ → Effectᴴ) : Set₁ where
-    field
-      traverse : ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄ → Alg (H NatUniverse) (λ x → Env → Hefty (H u) x)
-  open Traverse ⦃ ... ⦄
+--   record Sequence (H : (u : Universe) → ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄ → Effectᴴ) : Set₁ where
+--     field
+--       sequence : ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄ { H′ : (u : Universe) → ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄ → Effectᴴ} ⦃ sub : H u ⊂ H′ u ⦄ → Alg (H NatUniverse) (λ x → Env → Hefty (H′ u) x)
+--   open Sequence ⦃ ... ⦄
+--
+--
+--   instance
+--     ImmSequence : Sequence (λ u → Lift (Imm ⦃ u ⦄))
+--     alg (Sequence.sequence ImmSequence) =
+--       λ { (imm n) ψ k env → (cataᴴ return weaken (impure (imm n) (λ x → ⊥-elim x) return)) >>= λ x → let (x' , env') = insertEnv env x in k x' env' }
+--
+--   instance
+--     ArithSequence : Sequence (λ u → Lift (Arith ⦃ u ⦄))
+--     alg (Sequence.sequence ArithSequence) =
+--       λ { (add x y) ψ k env → let x' = lookupEnv env x ; y' = lookupEnv env y in cataᴴ pure weaken (impure (add x' y') (λ x → ⊥-elim x) pure) >>= λ x → let (x' , env') = insertEnv env x in k x' env'
+--         ; (sub x y) ψ k env → let x' = lookupEnv env x ; y' = lookupEnv env y in cataᴴ pure weaken (impure (sub x' y') (λ x → ⊥-elim x) pure) >>= λ x → let (x' , env') = insertEnv env x in k x' env'
+--         ; (neg x)   ψ k env → let x' = lookupEnv env x                        in cataᴴ pure weaken (impure (neg x')    (λ x → ⊥-elim x) pure) >>= λ x → let (x' , env') = insertEnv env x in k x' env'
+--         }
+--
+--   -- TODO the rest of the effects
+--
+--   lsub : (H₁ ∔ H₂) ⊂ H′ → H₁ ⊂ H′
+--   alg (_⊂_.weaken (lsub x)) = alg (weaken ⦃ x ⦄) ∘ inj₁
+--
+--   rsub : (H₁ ∔ H₂) ⊂ H′ → H₂ ⊂ H′
+--   alg (_⊂_.weaken (rsub x)) = alg (weaken ⦃ x ⦄) ∘ inj₂
+--
+--   instance
+--     SumSequence : { H₁ H₂ : ⦃ u : Universe ⦄ → Effectᴴ } ⦃ s₁ : Sequence (λ u → H₁ ⦃ u ⦄) ⦄ ⦃ s₂ : Sequence (λ u → H₂ ⦃ u ⦄) ⦄ → Sequence (λ u → H₁ ⦃ u ⦄ ∔ H₂ ⦃ u ⦄)
+--     alg (Sequence.sequence (SumSequence ⦃ s₁ = s₁ ⦄ ⦃ s₂ = s₂ ⦄ ) {H′ = H′} ⦃ sub = sub₁ ⦄) =
+--       λ { (inj₁ op) ψ k → alg (sequence {H′ = H′} ⦃ sub = lsub sub₁ ⦄) op ψ k
+--         ; (inj₂ op) ψ k → alg (sequence {H′ = H′} ⦃ sub = rsub sub₁ ⦄) op ψ k
+--         }
 
-  insertEnv : {A : Set} → A → Env → ℕ × Env
-  insertEnv = {!!}
+-- Kleisli arrow in the category of higher-order effect morphisms?
+record Pass (M : Set → Set) (H : Effectᴴ) (H′ : Effectᴴ) : Set₁ where
+  constructor mkPass
+  field pass :  (op  : Op H)
+                (ψ   : (s : Op (Fork H op)) → Hefty H′ (Ret (Fork H op) s))
+                (k   : Ret H op → Hefty H′ A)
+            → M (Hefty H′ A)
+open Pass
 
-  private
-    instance
-      LiftTraverse : Traverse (λ u → Lift (Imm ⦃ u ⦄))
-      Traverse.traverse LiftTraverse =
-        mkAlg λ { (imm n) ψ k env → impure (imm n) (λ x → ⊥-elim x) λ x → let (x' , env') = insertEnv x env in k x' env' }
+_>>=ₘ_ : { M : Set → Set } ⦃ _ : RawMonad M ⦄ → ∀ {A B} → M A → (A → M B) → M B
+_>>=ₘ_ ⦃ m ⦄ = RawMonad._>>=_ m
+
+-- Here's what will need to change:
+--
+--  * M should additionally always contain a way to store ℕ ↔ A bindings and retrieve them
+--    This should be discharged upon `cataPass`
+--
+--  This won't work because the value we need to store is only available from a function within M
+--  we cannot run something like `store : A → ℤ → M ⊤` to store it for later use.
+
+data Env : Set where
+
+postulate insertEnv : {A : Set} → Env → A → ℕ → Env
+postulate lookupEnv : {A : Set} → Env → ℕ → A
+postulate freshEnv : Env → ℕ
+postulate emptyEnv : Env
+
+cataPass :
+  { M : Set → Set }
+  ⦃ _ : RawMonad M ⦄ →
+
+  Env →
+
+  ({op : Op H} → ((s : Op (Fork H op)) → M (Hefty H′ (Ret (Fork H op) s))) →
+    M ((s : Op (Fork H op)) → Hefty H′ (Ret (Fork H op) s))) →
+
+  (Env → {op : Op H} → ∀ {A} → (Env → Ret H op → M (Hefty H′ A)) →
+    M (Ret H op → Hefty H′ A)) →
+
+  (∀ {A} → A → M (Hefty H′ A)) →
+  Pass M H H′ → Hefty H A → M (Hefty H′ A)
+
+cataPass env _ _ g _ (return x) = g x
+cataPass env sequenceFork sequenceK g p (impure op ψ k) =
+  sequenceFork (λ x → cataPass env sequenceFork sequenceK g p (ψ x)) >>=ₘ λ ψ′ →
+  sequenceK env (λ env′ x → cataPass env′ sequenceFork sequenceK g p (k x)) >>=ₘ λ k′ →
+  pass p op ψ′ k′
+
+sequenceForkLift : ⦃ u : Universe ⦄ { M : Set → Set } ⦃ m : RawMonad M ⦄ {op : Op (Lift ε)} → ((s : Op (Fork (Lift ε) op)) → M (Hefty H′ (Ret (Fork (Lift ε) op) s))) → M ((s : Op (Fork (Lift ε) op)) → Hefty H′ (Ret (Fork (Lift ε) op) s))
+sequenceForkLift ⦃ m = m ⦄ f = pure (λ x → ⊥-elim x)
+
+-- postulate store : A → M ℤ
+-- postulate retrieve : ℤ → M A
+
+sequenceKArith :
+  ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄
+  { M : Set → Set } ⦃ m : RawMonad M ⦄ →
+  Env →
+  {op : {u : Universe} ⦃ _ : HasVal u ⦄ → Op (Lift (Arith ⦃ u ⦄))} →
+  ∀ {A} →
+  (Env → Ret (Lift (Arith ⦃ NatUniverse.NatUniverse ⦄)) op → M (Hefty H′ A)) →
+  M (Ret (Lift (Arith ⦃ u ⦄))  op → Hefty H′ A)
+sequenceKArith env {op = op} f with freshEnv env
+... | n with op {NatUniverse.NatUniverse}
+...     | neg x = {!!} <$> f ? ?
+...     | add x y = {!!}
+...     | sub x y = {!!}
 
 -- TODO:
 --  [x] Weaken let2set_Alg
