@@ -1,0 +1,251 @@
+@article{10.1145/3428232,
+author = {Wei, Guannan and Bra\v{c}evac, Oliver and Tan, Shangyin and Rompf, Tiark},
+title = {Compiling Symbolic Execution with Staging and Algebraic Effects},
+year = {2020},
+issue_date = {November 2020},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {4},
+number = {OOPSLA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3428232},
+doi = {10.1145/3428232},
+abstract = {Building effective symbolic execution engines poses challenges in multiple dimensions: an engine must correctly model the program semantics, provide flexibility in symbolic execution strategies, and execute them efficiently. This paper proposes a principled approach to building correct, flexible, and efficient symbolic execution engines, directly rooted in the semantics of the underlying language in terms of a high-level definitional interpreter. The definitional interpreter induces algebraic effects to abstract over semantic variants of symbolic execution, e.g., collecting path conditions as a state effect and path exploration as a nondeterminism effect. Different handlers of these effects give rise to different symbolic execution strategies, making execution strategies orthogonal to the symbolic execution semantics, thus improving flexibility. Furthermore, by annotating the symbolic definitional interpreter with binding-times and specializing it to the input program via the first Futamura projection, we obtain a "symbolic compiler", generating efficient instrumented code having the symbolic execution semantics. Our work reconciles the interpretation- and instrumentation-based approaches to building symbolic execution engines in a uniform framework. We illustrate our approach on a simple imperative language step-by-step and then scale up to a significant subset of LLVM IR. We also show effect handlers for common path selection strategies. Evaluating our prototype's performance shows speedups of 10~30x over the unstaged counterpart, and ~2x over KLEE, a state-of-the-art symbolic interpreter for LLVM IR.},
+journal = {Proc. ACM Program. Lang.},
+month = {nov},
+articleno = {164},
+numpages = {33},
+keywords = {symbolic execution, multi-stage programming, algebraic effects, definitional interpreters}
+}
+
+@article{10.1145/3371119,
+author = {Xia, Li-yao and Zakowski, Yannick and He, Paul and Hur, Chung-Kil and Malecha, Gregory and Pierce, Benjamin C. and Zdancewic, Steve},
+title = {Interaction Trees: Representing Recursive and Impure Programs in Coq},
+year = {2019},
+issue_date = {January 2020},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {4},
+number = {POPL},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3371119},
+doi = {10.1145/3371119},
+abstract = {Interaction trees (ITrees) are a general-purpose data structure for representing the behaviors of recursive programs that interact with their environments. A coinductive variant of “free monads,” ITrees are built out of uninterpreted events and their continuations. They support compositional construction of interpreters from event handlers, which give meaning to events by defining their semantics as monadic actions. ITrees are expressive enough to represent impure and potentially nonterminating, mutually recursive computations, while admitting a rich equational theory of equivalence up to weak bisimulation. In contrast to other approaches such as relationally specified operational semantics, ITrees are executable via code extraction, making them suitable for debugging, testing, and implementing software artifacts that are amenable to formal verification. We have implemented ITrees and their associated theory as a Coq library, mechanizing classic domain- and category-theoretic results about program semantics, iteration, monadic structures, and equational reasoning. Although the internals of the library rely heavily on coinductive proofs, the interface hides these details so that clients can use and reason about ITrees without explicit use of Coq’s coinduction tactics. To showcase the utility of our theory, we prove the termination-sensitive correctness of a compiler from a simple imperative source language to an assembly-like target whose meanings are given in an ITree-based denotational semantics. Unlike previous results using operational techniques, our bisimulation proof follows straightforwardly by structural induction and elementary rewriting via an equational theory of combinators for control-flow graphs.},
+journal = {Proc. ACM Program. Lang.},
+month = {dec},
+articleno = {51},
+numpages = {32},
+keywords = {monads, compiler correctness, Coq, coinduction}
+}
+
+  
+
+@InProceedings{10.1007/3-540-45127-7_27,
+author="Visser, Eelco",
+editor="Middeldorp, Aart",
+title="Stratego: A Language for Program Transformation Based on Rewriting Strategies System Description of Stratego 0.5",
+booktitle="Rewriting Techniques and Applications",
+year="2001",
+publisher="Springer Berlin Heidelberg",
+address="Berlin, Heidelberg",
+pages="357--361",
+abstract="Program transformation is used in many areas of software engineering. Examples include compilation, optimization, synthesis, refactoring, migration, normalization and improvement [15]. Rewrite rules are a natural formalism for expressing single program transformations. However, using a standard strategy for normalizing a program with a set of rewrite rules is not adequate for implementing program transformation systems. It may be necessary to apply a rule only in some phase of a transformation, to apply rules in some order, or to apply a rule only to part of a program. These restrictions may be necessary to avoid non-termination or to choose a specific path in a non-con uent rewrite system.",
+isbn="978-3-540-45127-3"
+}
+
+@ARTICLE{6898704,
+
+  author={Wachsmuth, Guido H. and Konat, Gabriël D.P. and Visser, Eelco},
+
+  journal={IEEE Software}, 
+
+  title={Language Design with the Spoofax Language Workbench}, 
+
+  year={2014},
+
+  volume={31},
+
+  number={5},
+
+  pages={35-43},
+
+  doi={10.1109/MS.2014.100}}
+
+@InProceedings{10.1007/978-3-642-03359-9_6,
+author="Bove, Ana
+and Dybjer, Peter
+and Norell, Ulf",
+editor="Berghofer, Stefan
+and Nipkow, Tobias
+and Urban, Christian
+and Wenzel, Makarius",
+title="A Brief Overview of Agda -- A Functional Language with Dependent Types",
+booktitle="Theorem Proving in Higher Order Logics",
+year="2009",
+publisher="Springer Berlin Heidelberg",
+address="Berlin, Heidelberg",
+pages="73--78",
+abstract="We give an overview of Agda, the latest in a series of dependently typed programming languages developed in Gothenburg. Agda is based on Martin-L{\"o}f's intuitionistic type theory but extends it with numerous programming language features. It supports a wide range of inductive data types, including inductive families and inductive-recursive types, with associated flexible pattern-matching. Unlike other proof assistants, Agda is not tactic-based. Instead it has an Emacs-based interface which allows programming by gradual refinement of incomplete type-correct terms.",
+isbn="978-3-642-03359-9"
+}
+
+
+@unpublished{BachPoulsen2022heftyalgebras,
+  author = "Bach Poulsen, Casper and Cas van der Rest",
+  title  = "Hefty Algebras -- Modular Elaboration for Higher-Order Algebraic Operations",
+  note   = "Under submission",
+  year   = "2022"
+}
+
+@InProceedings{10.1007/978-3-642-00590-9_7,
+author="Plotkin, Gordon
+and Pretnar, Matija",
+editor="Castagna, Giuseppe",
+title="Handlers of Algebraic Effects",
+booktitle="Programming Languages and Systems",
+year="2009",
+publisher="Springer Berlin Heidelberg",
+address="Berlin, Heidelberg",
+pages="80--94",
+abstract="We present an algebraic treatment of exception handlers and, more generally, introduce handlers for other computational effects representable by an algebraic theory. These include nondeterminism, interactive input/output, concurrency, state, time, and their combinations; in all cases the computation monad is the free-model monad of the theory. Each such handler corresponds to a model of the theory for the effects at hand. The handling construct, which applies a handler to a computation, is based on the one introduced by Benton and Kennedy, and is interpreted using the homomorphism induced by the universal property of the free model. This general construct can be used to describe previously unrelated concepts from both theory and practice.",
+isbn="978-3-642-00590-9"
+}
+
+
+@InProceedings{10.1007/3-540-45315-6_1,
+author="Plotkin, Gordon
+and Power, John",
+editor="Honsell, Furio
+and Miculan, Marino",
+title="Adequacy for Algebraic Effects",
+booktitle="Foundations of Software Science and Computation Structures",
+year="2001",
+publisher="Springer Berlin Heidelberg",
+address="Berlin, Heidelberg",
+pages="1--24",
+abstract="Moggi proposed a monadic account of computational effects. He also presented the computational $\lambda$-calculus, $\lambda$c, a core call-by-value functional programming language for effects; the effects are obtained by adding appropriate operations. The question arises as to whether one can give a corresponding treatment of operational semantics. We do this in the case of algebraic effects where the operations are given by a single-sorted algebraic signature, and their semantics is supported by the monad, in a certain sense. We consider call-by-value PCF with--- and without---recursion, an extension of $\lambda$cwith arithmetic. We prove general adequacy theorems, and illustrate these with two examples: non-determinism and probabilistic nondeterminism.",
+isbn="978-3-540-45315-4"
+}
+
+@article{10.1145/1411203.1411226,
+author = {Chlipala, Adam},
+title = {Parametric Higher-Order Abstract Syntax for Mechanized Semantics},
+year = {2008},
+issue_date = {September 2008},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {43},
+number = {9},
+issn = {0362-1340},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1411203.1411226},
+doi = {10.1145/1411203.1411226},
+abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
+journal = {SIGPLAN Not.},
+month = {sep},
+pages = {143–156},
+numpages = {14},
+keywords = {type-theoretic semantics, dependent types, interactive proof assistants, compiler verification}
+}
+
+  
+
+@inproceedings{10.1145/1411204.1411226,
+author = {Chlipala, Adam},
+title = {Parametric Higher-Order Abstract Syntax for Mechanized Semantics},
+year = {2008},
+isbn = {9781595939197},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1411204.1411226},
+doi = {10.1145/1411204.1411226},
+abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
+booktitle = {Proceedings of the 13th ACM SIGPLAN International Conference on Functional Programming},
+pages = {143–156},
+numpages = {14},
+keywords = {type-theoretic semantics, dependent types, interactive proof assistants, compiler verification},
+location = {Victoria, BC, Canada},
+series = {ICFP '08}
+}
+
+  
+
+@inproceedings{10.1145/1016850.1016878,
+author = {Sarkar, Dipanwita and Waddell, Oscar and Dybvig, R. Kent},
+title = {A Nanopass Infrastructure for Compiler Education},
+year = {2004},
+isbn = {1581139055},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1016850.1016878},
+doi = {10.1145/1016850.1016878},
+abstract = {Compilers structured as a small number of monolithic passes are difficult to understand and difficult to maintain. Adding new optimizations often requires major restructuring of existing passes that cannot be understood in isolation. The steep learning curve is daunting, and even experienced developers find it hard to modify existing passes without introducing subtle and tenacious bugs. These problems are especially frustrating when the developer is a student in a compiler class.An attractive alternative is to structure a compiler as a collection of many small passes, each of which performs a single task. This "micropass" structure aligns the actual implementation of a compiler with its logical organization, simplifying development, testing, and debugging. Unfortunately, writing many small passes duplicates code for traversing and rewriting abstract syntax trees and can obscure the meaningful transformations performed by individual passes.To address these problems, we have developed a methodology and associated tools that simplify the task of building compilers composed of many fine-grained passes. We describe these compilers as "nanopass" compilers to indicate both the intended granularity of the passes and the amount of source code required to implement each pass. This paper describes the methodology and tools comprising the nanopass framework.},
+booktitle = {Proceedings of the Ninth ACM SIGPLAN International Conference on Functional Programming},
+pages = {201–212},
+numpages = {12},
+keywords = {domain-specific languages, nanopass compilers, compiler writing tools, syntactic abstraction},
+location = {Snow Bird, UT, USA},
+series = {ICFP '04}
+}
+
+
+@article{10.1145/2544174.2500618,
+author = {Keep, Andrew W. and Dybvig, R. Kent},
+title = {A Nanopass Framework for Commercial Compiler Development},
+year = {2013},
+issue_date = {September 2013},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {48},
+number = {9},
+issn = {0362-1340},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/2544174.2500618},
+doi = {10.1145/2544174.2500618},
+abstract = {Contemporary compilers must typically handle sophisticated high-level source languages, generate efficient code for multiple hardware architectures and operating systems, and support source-level debugging, profiling, and other program development tools. As a result, compilers tend to be among the most complex of software systems. Nanopass frameworks are designed to help manage this complexity. A nanopass compiler is comprised of many single-task passes with formally defined intermediate languages. The perceived downside of a nanopass compiler is that the extra passes will lead to substantially longer compilation times. To determine whether this is the case, we have created a plug replacement for the commercial Chez Scheme compiler, implemented using an updated nanopass framework, and we have compared the speed of the new compiler and the code it generates against the original compiler for a large set of benchmark programs. This paper describes the updated nanopass framework, the new compiler, and the results of our experiments. The compiler produces faster code than the original, averaging 15-27% depending on architecture and optimization level, due to a more sophisticated but slower register allocator and improvements to several optimizations. Compilation times average well within a factor of two of the original compiler, despite the slower register allocator and the replacement of five passes of the original 10 with over 50 nanopasses.},
+journal = {SIGPLAN Not.},
+month = {sep},
+pages = {343–350},
+numpages = {8},
+keywords = {scheme, nanopass, compiler}
+}
+
+  
+
+@inproceedings{10.1145/2500365.2500618,
+author = {Keep, Andrew W. and Dybvig, R. Kent},
+title = {A Nanopass Framework for Commercial Compiler Development},
+year = {2013},
+isbn = {9781450323260},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/2500365.2500618},
+doi = {10.1145/2500365.2500618},
+abstract = {Contemporary compilers must typically handle sophisticated high-level source languages, generate efficient code for multiple hardware architectures and operating systems, and support source-level debugging, profiling, and other program development tools. As a result, compilers tend to be among the most complex of software systems. Nanopass frameworks are designed to help manage this complexity. A nanopass compiler is comprised of many single-task passes with formally defined intermediate languages. The perceived downside of a nanopass compiler is that the extra passes will lead to substantially longer compilation times. To determine whether this is the case, we have created a plug replacement for the commercial Chez Scheme compiler, implemented using an updated nanopass framework, and we have compared the speed of the new compiler and the code it generates against the original compiler for a large set of benchmark programs. This paper describes the updated nanopass framework, the new compiler, and the results of our experiments. The compiler produces faster code than the original, averaging 15-27% depending on architecture and optimization level, due to a more sophisticated but slower register allocator and improvements to several optimizations. Compilation times average well within a factor of two of the original compiler, despite the slower register allocator and the replacement of five passes of the original 10 with over 50 nanopasses.},
+booktitle = {Proceedings of the 18th ACM SIGPLAN International Conference on Functional Programming},
+pages = {343–350},
+numpages = {8},
+keywords = {scheme, nanopass, compiler},
+location = {Boston, Massachusetts, USA},
+series = {ICFP '13}
+}
+
+  
+
+  
+
+@article{10.1145/1016848.1016878,
+author = {Sarkar, Dipanwita and Waddell, Oscar and Dybvig, R. Kent},
+title = {A Nanopass Infrastructure for Compiler Education},
+year = {2004},
+issue_date = {September 2004},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {39},
+number = {9},
+issn = {0362-1340},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1016848.1016878},
+doi = {10.1145/1016848.1016878},
+abstract = {Compilers structured as a small number of monolithic passes are difficult to understand and difficult to maintain. Adding new optimizations often requires major restructuring of existing passes that cannot be understood in isolation. The steep learning curve is daunting, and even experienced developers find it hard to modify existing passes without introducing subtle and tenacious bugs. These problems are especially frustrating when the developer is a student in a compiler class.An attractive alternative is to structure a compiler as a collection of many small passes, each of which performs a single task. This "micropass" structure aligns the actual implementation of a compiler with its logical organization, simplifying development, testing, and debugging. Unfortunately, writing many small passes duplicates code for traversing and rewriting abstract syntax trees and can obscure the meaningful transformations performed by individual passes.To address these problems, we have developed a methodology and associated tools that simplify the task of building compilers composed of many fine-grained passes. We describe these compilers as "nanopass" compilers to indicate both the intended granularity of the passes and the amount of source code required to implement each pass. This paper describes the methodology and tools comprising the nanopass framework.},
+journal = {SIGPLAN Not.},
+month = {sep},
+pages = {201–212},
+numpages = {12},
+keywords = {domain-specific languages, syntactic abstraction, compiler writing tools, nanopass compilers}
+}
