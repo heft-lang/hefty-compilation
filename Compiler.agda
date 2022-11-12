@@ -79,14 +79,14 @@ module Effects where
   variable
     A : Set
 
-  -- Imm(ediate)
+  -- Int(ediate)
 
-  data ImmOp : Set where
-    imm : ℤ → ImmOp
+  data IntOp : Set where
+    imm : ℤ → IntOp
 
-  Imm : ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ → Effect
-  Op Imm = ImmOp
-  Ret Imm (imm _) = ⟦ val ⟧
+  Int : ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ → Effect
+  Op Int = IntOp
+  Ret Int (imm _) = ⟦ val ⟧
 
   -- Arith(methic)
 
@@ -186,7 +186,7 @@ data LExp ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ : Set where
   ⦃ w₁ : H ∼ Lift Arith ▹ H₁ ⦄
   ⦃ w₂ : H ∼ Lift Read ▹ H₂ ⦄
   ⦃ w₃ : H ∼ Let ▹ H₃ ⦄
-  ⦃ w₄ : H ∼ Lift Imm ▹ H₄ ⦄
+  ⦃ w₄ : H ∼ Lift Int ▹ H₄ ⦄
   →
   LExp → Hefty H ⟦ val ⟧
 ⟦ LInt n ⟧e = ↑ (imm n)
@@ -263,7 +263,7 @@ module StringUniverse where
     StringHasLab : HasLabel StringUniverse
     HasLabel.lab StringHasLab = tt
 
-  pretty-imm : Alg (Lift Imm) (λ _ → String)
+  pretty-imm : Alg (Lift Int) (λ _ → String)
   pretty-imm = mkAlg λ { (imm n) _ k → k (ℤShow.show n) }
 
   showReg : Reg → String
@@ -305,7 +305,7 @@ ex0-1 :
   ⦃ w₁ : H ∼ Lift Arith ▹ H₁ ⦄
   ⦃ w₂ : H ∼ Lift Read ▹ H₂ ⦄
   ⦃ w₃ : H ∼ Let ▹ H₃ ⦄
-  ⦃ w₄ : H ∼ Lift Imm ▹ H₄ ⦄
+  ⦃ w₄ : H ∼ Lift Int ▹ H₄ ⦄
   →
   Hefty H ⟦ val ⟧
 ex0-1 = ⟦ ex0-0 ⟧e
@@ -314,7 +314,7 @@ ex0-2 :
   ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄
   ⦃ w₁ : H ∼ Lift Arith ▹ H₁ ⦄
   ⦃ w₂ : H ∼ Lift Read ▹ H₂ ⦄
-  ⦃ w₃ : H ∼ Lift Imm ▹ H₃ ⦄
+  ⦃ w₃ : H ∼ Lift Int ▹ H₃ ⦄
   →
   Hefty H ⟦ val ⟧
 ex0-2 = cataᴴ pure let-Alg ex0-1
@@ -324,7 +324,7 @@ ex0-3 :
   ⦃ w₁ : H ∼ Lift X86Var ▹ H₁ ⦄
   ⦃ w₂ : H ∼ Lift X86 ▹ H₂ ⦄
   ⦃ w₃ : H ∼ Lift Read ▹ H₃ ⦄
-  ⦃ w₄ : H ∼ Lift Imm ▹ H₄ ⦄
+  ⦃ w₄ : H ∼ Lift Int ▹ H₄ ⦄
   →
   Hefty H ⟦ val ⟧
 ex0-3 {H = H} = cataᴴ pure arith-Alg (ex0-2 {Lift Arith ∔ H})
@@ -333,7 +333,7 @@ ex0-4 :
   ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄
   ⦃ w₁ : H ∼ Lift X86Var ▹ H₁ ⦄
   ⦃ w₂ : H ∼ Lift X86 ▹ H₂ ⦄
-  ⦃ w₃ : H ∼ Lift Imm ▹ H₃ ⦄
+  ⦃ w₃ : H ∼ Lift Int ▹ H₃ ⦄
   →
   ⟦ lab ⟧ → Hefty H ⟦ val ⟧
 ex0-4 {H = H} read-int-lab = cataᴴ pure (read-Alg read-int-lab) (ex0-3 {Lift Read ∔ H})
@@ -341,7 +341,7 @@ ex0-4 {H = H} read-int-lab = cataᴴ pure (read-Alg read-int-lab) (ex0-3 {Lift R
 ex0-5 :
   ⦃ u : Universe ⦄ ⦃ _ : HasVal u ⦄ ⦃ _ : HasLabel u ⦄
   ⦃ w₂ : H ∼ Lift X86 ▹ H₂ ⦄
-  ⦃ w₃ : H ∼ Lift Imm ▹ H₃ ⦄
+  ⦃ w₃ : H ∼ Lift Int ▹ H₃ ⦄
   →
   ⟦ lab ⟧ → Hefty H ⟦ val ⟧
 ex0-5 {H = H} read-int-lab = cataᴴ (λ x _ → pure x) x86var-Alg (ex0-4 read-int-lab) 1
@@ -438,8 +438,8 @@ ex0-6 = cataᴴ (const "") (pretty-imm ⋎ pretty-x86 ⋎ nil-Alg) (ex0-5 ⦃ St
 --
 --
 --   instance
---     ImmSequence : Sequence (λ u → Lift (Imm ⦃ u ⦄))
---     alg (Sequence.sequence ImmSequence) =
+--     IntSequence : Sequence (λ u → Lift (Int ⦃ u ⦄))
+--     alg (Sequence.sequence IntSequence) =
 --       λ { (imm n) ψ k env → (cataᴴ pure weaken (impure (imm n) (λ x → ⊥-elim x) pure)) >>= λ x → let (x' , env') = insertEnv env x in k x' env' }
 --
 --   instance
