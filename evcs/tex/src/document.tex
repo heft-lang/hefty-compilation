@@ -77,6 +77,7 @@
 
 \newcommand\bind[1]{>\!\!>\!\!= \lambda #1.\,}
 \newcommand\then{>\!\!>}
+\newcommand\append{+\!\!\!\!+~}
 
 
 \begin{document}
@@ -89,7 +90,7 @@
   We propose a semantics-driven variant of the nanopass compiler architecture exploring the use a effects and handlers to model the intermediate languages and the transformation passes, respectively.
   Our approach is fully typed and ensures that all cases in the compiler are covered.
   Additionally, by using an effect system we abstract over the control flow of the intermediate language making the compiler even more flexible.
-  We apply this approach to a minimal compiler from a language with arithmetic and let-bound variables to a minimal subset of X86 machine code with variables.
+  We apply this approach to a minimal compiler from a language with arithmetic and let-bound variables to a string of pretty printed X86 instructions.
   In the future, we hope to extend this work to compile a larger and more complicated language and we envision a formal verification framework from compilers written in this style.
 \end{abstract}
 
@@ -108,15 +109,17 @@ To address concerns about the performance of this architecture, Keep and Dybvig 
 
 While the development of the nanopass architecture and the development of a commercial compiler is a great engineering achievement, we believe the theoretical foundation is underexplored.
 In this paper, we present our ongoing work on developing a semantics-driven nanopass compiler architecture.
+The foundation of our approach is a higher-order effect system~\cite{BachPoulsen2022heftyalgebras} which is a state of the art technique for modeling the semantics of programming languages with side effects.
 Our approach has the practical advantage of preventing type errors in the compiler and ensuring all cases are covered.
 Additionally, our approach abstracts over the control flow giving many of the benefits of continuation-passing-style while retaining a simple monadic interface.
-During the development of our approach, we are anticipating the possibility of verifying the correctness of compilers written in this style.
+While developing our approach, we are anticipating the possibility of verifying the correctness of compilers written in this style.
+We discuss that possibility briefly in our future work (Section~\ref{sec:conclusion}).
 
 \noindent
 Concretely, we make the following contributions:
 \begin{itemize}
   \item We introduce a novel approach to designing and implementing practical compilers while staying close to formal denotational semantics specifications (Section~\ref{sec:compiling}). 
-  \item We demonstrate our approach on a simple language with arithmetic and let-bound variables (Section~\ref{sec:compiling}). We compile this language to a subset of X86 with variables. We are still working a method to allocate these variables on the stack.
+  \item We demonstrate our approach on a simple language with arithmetic and let-bound variables by compiling it to a subset of X86 (Section~\ref{sec:compiling}).
 \end{itemize}
 
 \section{Compiling with Higher-order Effects}\label{sec:compiling}
@@ -125,6 +128,7 @@ In this section, we present our approach by applying it to a very simple languag
 The target language of our compiler is X86 machine code.
 We explain the required concepts as we develop our compiler for this language.
 The specifications and compiler passes are presented in a simplified notation, but we have implemented all the work we present here in the Agda programming language~\cite{10.1007/978-3-642-03359-9_6}.
+Our code can be found on GitHub\footnote{\url{https://github.com/heft-lang/hefty-compilation}}.
 
 We start off by assuming our parser and possibly type checker has finished and produced an abstract syntax tree which follows the grammar described in Figure~\ref{fig:source-absyn}.
 Our language has integers, addition, subtraction, negation, a read operation to read an input integer, and a let to bind variables and a var to refer to bound variables.
@@ -150,11 +154,15 @@ As is customary when using algebraic effects in functional programming languages
 We could group every operation under a single effect, however with the benefit of hindsight we decide to distribute the operations over four effects: Int, Arith, Read, and Let.
 
 \begin{figure}[ht]
-\begin{minipage}{0.4\textwidth}
+\begin{minipage}[t]{0.4\textwidth}
+\textbf{effect} Int \textbf{where}
+\vspace{-1em}
 \begin{alignat*}{2}
   \mathit{int} & : \mathbb{Z} && \to m~\mathit{val}
 \end{alignat*}
 
+\textbf{effect} Arith \textbf{where}
+\vspace{-1em}
 \begin{alignat*}{2}
   \mathit{add} & : \mathit{val} \to \mathit{val} && \to m~\mathit{val} \\
   \mathit{sub} & : \mathit{val} \to \mathit{val} && \to m~\mathit{val} \\
@@ -162,16 +170,20 @@ We could group every operation under a single effect, however with the benefit o
 \end{alignat*}
 \end{minipage}%
 %
-\begin{minipage}{0.6\textwidth}
+\begin{minipage}[t]{0.6\textwidth}
+\textbf{effect} Read \textbf{where}
+\vspace{-1em}
 \begin{alignat*}{2}
   \mathit{read} & : m~\mathit{val}
 \end{alignat*}
 
+\textbf{effect} Let \textbf{where}
+\vspace{-1em}
 \begin{alignat*}{2}
   \mathit{let} & : m~\mathit{val} \to (\mathit{val} \to m~\mathit{val}) && \to m~\mathit{val}
 \end{alignat*}
 \end{minipage}
-  \caption{The operations of our source language with their signatures. Divided into the following effects from left to right and then top to bottom: Int, Read, Arith, and Let.}\label{fig:source-ops}
+  \caption{The effects of our source language and their operations with type signatures.}\label{fig:source-ops}
 \end{figure}
 
 Figure~\ref{fig:source-ops} shows the operations that correspond directly to our source language.
@@ -204,7 +216,7 @@ The result of this mapping is a monadic computation involving the Int, Arith, Re
   [\![ \mathrm{let}(e,f) ]\!] & = \mathit{let}~[\![e]\!]~(\lambda x.\, [\![ f~x ]\!]) \\
   [\![ \mathrm{var}(x) ]\!] & = \mathit{return}~x
 \end{align*}
-  \caption{Denotational mapping from our abstract syntax onto our initial set of effectful operations.}\label{fig:den}
+  \caption{A denotational mapping from our abstract syntax onto our initial set of effectful operations.}\label{fig:den}
 \end{figure}
 
 Now that we have denoted our syntactic elements into our semantic domain as operations, we can start refining these operations to get closer to the desired target language which is X86 in our case.
@@ -222,22 +234,27 @@ By using a different handler we could give different semantics to our language.
 This is an example of the flexiblility of algebraic effects and handlers.
 
 \begin{figure}[ht]
-  \begin{minipage}{0.4\textwidth}
-  \begin{alignat*}{2}
-    addq  & : \mathit{val} \to \mathit{val} && \to m~() \\
-    subq  & : \mathit{val} \to \mathit{val} && \to m~() \\
-    negq  & : \mathit{val}                  && \to m~() \\
-    movq  & : \mathit{val} \to \mathit{val} && \to m~() \\
-    callq & : \mathit{lab}                  && \to m~() \\
-    reg   & : \mathrm{Register}             && \to m~\mathit{val}
+  \begin{minipage}[t]{0.4\textwidth}
+  \textbf{effect} X86 \textbf{where}
+  \vspace{-1em}
+  \begin{alignat*}{3}
+    & \mathit{addq}  && : \mathit{val} \to \mathit{val} && \to m~() \\
+    & \mathit{subq}  && : \mathit{val} \to \mathit{val} && \to m~() \\
+    & \mathit{negq}  && : \mathit{val}                  && \to m~() \\
+    & \mathit{movq}  && : \mathit{val} \to \mathit{val} && \to m~() \\
+    & \mathit{callq} && : \mathit{lab}                  && \to m~() \\
+    & \mathit{reg}   && : \mathrm{Register}             && \to m~\mathit{val} \\
+    & \mathit{deref} && : \mathrm{Register} \to \mathit{\mathbb{Z}} && \to m~\mathit{val}
   \end{alignat*}
   \end{minipage}
-  \begin{minipage}{0.4\textwidth}
+  \begin{minipage}[t]{0.4\textwidth}
+  \textbf{effect} X86Var \textbf{where}
+  \vspace{-1em}
   \begin{align*}
-    x86var : m~\mathit{val}
+    \mathit{x86var} : m~\mathit{val}
   \end{align*}
   \end{minipage}
-  \caption{X86 related effects. On the left X86. On the right X86Var.}\label{fig:x86-ops}
+  \caption{The effects related to X86 and their operations with type signatures.}\label{fig:x86-ops}
 \end{figure}
 
 At this point, since our language is so simple we can already begin translating into our target language.
@@ -248,32 +265,57 @@ Additionally, we add an operation to generate fresh variables and inject them in
 We can trasnlate our Arith effect operations into X86 operations by creating a fresh X86 variable, populating it, and then applying the in-place arithmetic operation to the variable.
 So, we write handler as follows:
 \begin{alignat*}{2}
-  & \mathrm{handle}~(\mathit{add}~x~y) &&~k = x86var \bind{z} \mathit{movq}~x~z \then \mathit{addq}~y~z \then k~z \\
-  & \mathrm{handle}~(\mathit{sub}~x~y) &&~k = x86var \bind{z} \mathit{movq}~x~z \then \mathit{subq}~y~z \then k~z \\
-  & \mathrm{handle}~(\mathit{add}~x) &&~k = x86var \bind{z} \mathit{movq}~x~z \then \mathit{negq}~z \then k~z
+  & \mathrm{handle}~(\mathit{add}~x~y) &&~k = \mathit{x86var} \bind{z} \mathit{movq}~x~z \then \mathit{addq}~y~z \then k~z \\
+  & \mathrm{handle}~(\mathit{sub}~x~y) &&~k = \mathit{x86var} \bind{z} \mathit{movq}~x~z \then \mathit{subq}~y~z \then k~z \\
+  & \mathrm{handle}~(\mathit{neg}~x) &&~k = \mathit{x86var} \bind{z} \mathit{movq}~x~z \then \mathit{negq}~z \then k~z
 \end{alignat*}
-The $\mathit{read}$ operation requires us to call a function that we will assume is defined in a standard library called $\mathrm{read\_int}$. This function places its output in the $\mathrm{\%rax}$ register, so we have to move it to avoid it being overwritten by other parts of our program.
+The $\mathit{read}$ operation requires us to call a function that we will assume is defined in a standard library called $\mathrm{\_read\_int}$. This function places its output in the $\mathrm{\%rax}$ register, so we have to move it to avoid it being overwritten by other parts of our program.
 The full definition of our handler for the Read effect is as follows:
 \begin{align*}
-  \mathrm{handle}~\mathit{read}~k & = x86var \bind{z} \mathit{callq}~\mathrm{read\_int} \then \mathit{reg}~\mathrm{\%rax} \bind{x} \mathit{movq}~x~z \then k~z
+  \mathrm{handle}~\mathit{read}~k & = \mathit{x86var} \bind{z} \mathit{callq}~\mathrm{\_read\_int} \then \mathit{reg}~\mathrm{\%rax} \bind{x} \mathit{movq}~x~z \then k~z
 \end{align*}
 
-The final challenge to complete this minimal compiler is to allocate the X86 variables on the stack.
+The final challenge to complete this minimal compiler pipeline is to allocate the X86 variables on the stack.
 Conceptually, this requires us to give each $\mathit{x86var}$ operation and give each its own location of the stack.
 Keeping track of such information in our handler, however, is something we have not yet needed to do for the passes up to this point.
-The main problem is that we need to pass a valid value as input to the continuation of each operation to get access to the operations in the contination.
-When the type of the argument of the contination is a unit type, such as for the X86 arithmetic, move, and call instructions, then we can simply construct the unit value and pass that to the contination.
-However, if we allow arbitrary concrete types as results of our operations then there is no guarantee that we can construct a value of that type and it is not always possible to reconstruct the higher-order representation if we do manage to construct such a value.
+Until now, we have handled each effect by translating into other effects direclty.
+Instead, we can parameterize our handlers which means we pass along an extra parameter while handling our operations.
+Parameterized handlers take one extra parameter and need to pass one extra argument to the continuation\footnote{We ignore effectful subcomputations, because they were already removed in an earlier pass.}. 
+Now we can write the parameterized handler for the X86Var effect which assigns each variable to its own stack location as follows:
+\begin{align*}
+  \mathrm{handle}~\mathit{x86var}~k~n = \mathit{deref}~\mathrm{\%rbp}~(-8 \cdot n) \bind{z} k~z~(n + 1)
+\end{align*}
+Note that we assume sufficient space is allocated on the stack.
+Additionally, when applying this handler we need to provide the starting value of the parameter $n$, which we will choose to be $1$.
 
-Luckily, we have chosen to keep our value type abstract.
-So, we still have a choice to instantiate it to a type that suits our purpose.
-Instantiating it to the unit type would make it possible for us to construct a value to pass to the continuation.
-However, we would no longer be able to distinguish values passed to different continuations, so it would not be possible to reconstruct a higher order representation for further manipulation.
-Instead, our solution is to instatiate it to the type of natural numbers and to pass a unique number to each continuation.
-Whenever we encounter such a natural number in the rest of the program, we know which continuation it originated from.
-Hence, we are able to reconstruct a higher order operation.
+At this point, we have a full compiler pipeline from our source language to a subset of X86, but is still in the form of an effectful computation.
+To get a concrete representation, we implement two handlers for the remaining Int and X86 effects to produce an output string.
+As part of choosing this concrete representation, we also choose the concrete type for the variables $\mathit{val}$ and $\mathit{lab}$ to be the string type.
+We define the handler that turns our effectful computation of Int and X86 effects into a concrete string representation as follows:
+\begin{alignat*}{2}
+  & \mathrm{handle}~(\mathit{int}~n)~&& k = k~(\mathrm{showInt}~n) \\
+  & \mathrm{handle}~(\mathit{addq}~x~y)~&& k = \texttt{"addq "} \append x \append \texttt{", "} \append y \append \texttt{"\textbackslash{}n"} \append k~() \\
+  & \mathrm{handle}~(\mathit{subq}~x~y)~&& k = \texttt{"subq "} \append x \append \texttt{", "} \append y \append \texttt{"\textbackslash{}n"} \append k~() \\
+  & \mathrm{handle}~(\mathit{negq}~x)~&& k = \texttt{"negq "} \append x \append \texttt{"\textbackslash{}n"} \append k~() \\
+  & \mathrm{handle}~(\mathit{movq}~x~y)~&& k = \texttt{"movq "} \append x \append \texttt{", "} \append y \append \texttt{"\textbackslash{}n"} \append k~() \\
+  & \mathrm{handle}~(\mathit{callq}~l)~&& k = \texttt{"callq "} \append l \append \texttt{"\textbackslash{}n"} \append k~() \\
+  & \mathrm{handle}~(\mathit{reg}~r)~&& k = k~(\mathrm{showReg}~r) \\
+  & \mathrm{handle}~(\mathit{int}~r~n)~&& k = k~(\mathrm{showInt}~n \append \texttt{"("} \append \mathrm{showReg}~r \append \texttt{")"})
+\end{alignat*}
 
-This process sounds complicated, but we expect it is possible to expose the ability to keep track of the required information through an easy to use API. 
+% The main problem is that we need to pass a valid value as input to the continuation of each operation to get access to the operations in the contination.
+% When the type of the argument of the contination is a unit type, such as for the X86 arithmetic, move, and call instructions, then we can simply construct the unit value and pass that to the contination.
+% However, if we allow arbitrary concrete types as results of our operations then there is no guarantee that we can construct a value of that type and it is not always possible to reconstruct the higher-order representation if we do manage to construct such a value.
+% 
+% Luckily, we have chosen to keep our value type abstract.
+% So, we still have a choice to instantiate it to a type that suits our purpose.
+% Instantiating it to the unit type would make it possible for us to construct a value to pass to the continuation.
+% However, we would no longer be able to distinguish values passed to different continuations, so it would not be possible to reconstruct a higher order representation for further manipulation.
+% Instead, our solution is to instatiate it to the type of natural numbers and to pass a unique number to each continuation.
+% Whenever we encounter such a natural number in the rest of the program, we know which continuation it originated from.
+% Hence, we are able to reconstruct a higher order operation.
+% 
+% This process sounds complicated, but we expect it is possible to expose the ability to keep track of the required information through an easy to use API. 
 
 \section{Related Work}\label{sec:related}
 
@@ -315,7 +357,13 @@ We show the implementation of a denotation function and handlers which compile t
 Currently, we are working on a stack allocation pass to complete this minimal compiler.
 
 In the future, we would like to complete the minimal compiler and extend it with more complicated language constructs such as conditionals and anonymous functions.
+Additionally, we would like to implement more complicated analyses on this effectful representation, such as register allocation.
+We expect these analyses to consist of two stages: first derive concrete structures such as control-flow graphs and interference graphs from our effectful representation, and then perform a pass over the effectful computation that uses the results of the analysis over these structures to transform the program.
+The first stage would be similar to our handler that turns the effectful computation into a concrete string and the second stage would employ a parameterized handler similar to our stack allocation handler.
+
 Furthermore, we would like to explore the verification of our compilers using algebraic laws for our effect operations.
+To be specific, we can define a set of laws that describe the behavior of each of the effects in our compiler pipeline.
+If these laws are sound and complete, with respect to for example definitional interpreters for the effects, then we can prove compiler correctness by proving that these laws are preserved by each of our handlers.
 
 %%
 %% Bibliography
