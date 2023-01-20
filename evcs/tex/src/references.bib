@@ -51,23 +51,6 @@ abstract="Program transformation is used in many areas of software engineering. 
 isbn="978-3-540-45127-3"
 }
 
-@ARTICLE{6898704,
-
-  author={Wachsmuth, Guido H. and Konat, Gabriël D.P. and Visser, Eelco},
-
-  journal={IEEE Software}, 
-
-  title={Language Design with the Spoofax Language Workbench}, 
-
-  year={2014},
-
-  volume={31},
-
-  number={5},
-
-  pages={35-43},
-
-  doi={10.1109/MS.2014.100}}
 
 @InProceedings{10.1007/978-3-642-03359-9_6,
 author="Bove, Ana
@@ -88,11 +71,23 @@ isbn="978-3-642-03359-9"
 }
 
 
-@unpublished{BachPoulsen2022heftyalgebras,
-  author = "Bach Poulsen, Casper and Cas van der Rest",
-  title  = "Hefty Algebras -- Modular Elaboration for Higher-Order Algebraic Operations",
-  note   = "Under submission",
-  year   = "2022"
+@article{10.1145/3571255,
+author = {Bach Poulsen, Casper and van der Rest, Cas},
+title = {Hefty Algebras: Modular Elaboration of Higher-Order Algebraic Effects},
+year = {2023},
+issue_date = {January 2023},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {7},
+number = {POPL},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3571255},
+doi = {10.1145/3571255},
+abstract = {Algebraic effects and handlers is an increasingly popular approach to programming with effects. An attraction of the approach is its modularity: effectful programs are written against an interface of declared operations, which allows the implementation of these operations to be defined and refined without changing or recompiling programs written against the interface. However, higher-order operations (i.e., operations that take computations as arguments) break this modularity. While it is possible to encode higher-order operations by elaborating them into more primitive algebraic effects and handlers, such elaborations are typically not modular. In particular, operations defined by elaboration are typically not a part of any effect interface, so we cannot define and refine their implementation without changing or recompiling programs. To resolve this problem, a recent line of research focuses on developing new and improved effect handlers. In this paper we present a (surprisingly) simple alternative solution to the modularity problem with higher-order operations: we modularize the previously non-modular elaborations commonly used to encode higher-order operations. Our solution is as expressive as the state of the art in effects and handlers.},
+journal = {Proc. ACM Program. Lang.},
+month = {jan},
+articleno = {62},
+numpages = {31},
+keywords = {Reuse, Agda, Algebraic Effects, Modularity, Dependent Types}
 }
 
 @InProceedings{10.1007/978-3-642-00590-9_7,
@@ -140,7 +135,7 @@ doi = {10.1145/1411203.1411226},
 abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
 journal = {SIGPLAN Not.},
 month = {sep},
-pages = {143–156},
+pages = {143-156},
 numpages = {14},
 keywords = {type-theoretic semantics, dependent types, interactive proof assistants, compiler verification}
 }
@@ -158,7 +153,7 @@ url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1411204.1411226},
 doi = {10.1145/1411204.1411226},
 abstract = {We present parametric higher-order abstract syntax (PHOAS), a new approach to formalizing the syntax of programming languages in computer proof assistants based on type theory. Like higher-order abstract syntax (HOAS), PHOAS uses the meta language's binding constructs to represent the object language's binding constructs. Unlike HOAS, PHOAS types are definable in general-purpose type theories that support traditional functional programming, like Coq's Calculus of Inductive Constructions. We walk through how Coq can be used to develop certified, executable program transformations over several statically-typed functional programming languages formalized with PHOAS; that is, each transformation has a machine-checked proof of type preservation and semantic preservation. Our examples include CPS translation and closure conversion for simply-typed lambda calculus, CPS translation for System F, and translation from a language with ML-style pattern matching to a simpler language with no variable-arity binding constructs. By avoiding the syntactic hassle associated with first-order representation techniques, we achieve a very high degree of proof automation.},
 booktitle = {Proceedings of the 13th ACM SIGPLAN International Conference on Functional Programming},
-pages = {143–156},
+pages = {143-156},
 numpages = {14},
 keywords = {type-theoretic semantics, dependent types, interactive proof assistants, compiler verification},
 location = {Victoria, BC, Canada},
@@ -178,7 +173,7 @@ url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1016850.1016878},
 doi = {10.1145/1016850.1016878},
 abstract = {Compilers structured as a small number of monolithic passes are difficult to understand and difficult to maintain. Adding new optimizations often requires major restructuring of existing passes that cannot be understood in isolation. The steep learning curve is daunting, and even experienced developers find it hard to modify existing passes without introducing subtle and tenacious bugs. These problems are especially frustrating when the developer is a student in a compiler class.An attractive alternative is to structure a compiler as a collection of many small passes, each of which performs a single task. This "micropass" structure aligns the actual implementation of a compiler with its logical organization, simplifying development, testing, and debugging. Unfortunately, writing many small passes duplicates code for traversing and rewriting abstract syntax trees and can obscure the meaningful transformations performed by individual passes.To address these problems, we have developed a methodology and associated tools that simplify the task of building compilers composed of many fine-grained passes. We describe these compilers as "nanopass" compilers to indicate both the intended granularity of the passes and the amount of source code required to implement each pass. This paper describes the methodology and tools comprising the nanopass framework.},
 booktitle = {Proceedings of the Ninth ACM SIGPLAN International Conference on Functional Programming},
-pages = {201–212},
+pages = {201-212},
 numpages = {12},
 keywords = {domain-specific languages, nanopass compilers, compiler writing tools, syntactic abstraction},
 location = {Snow Bird, UT, USA},
@@ -201,7 +196,7 @@ doi = {10.1145/2544174.2500618},
 abstract = {Contemporary compilers must typically handle sophisticated high-level source languages, generate efficient code for multiple hardware architectures and operating systems, and support source-level debugging, profiling, and other program development tools. As a result, compilers tend to be among the most complex of software systems. Nanopass frameworks are designed to help manage this complexity. A nanopass compiler is comprised of many single-task passes with formally defined intermediate languages. The perceived downside of a nanopass compiler is that the extra passes will lead to substantially longer compilation times. To determine whether this is the case, we have created a plug replacement for the commercial Chez Scheme compiler, implemented using an updated nanopass framework, and we have compared the speed of the new compiler and the code it generates against the original compiler for a large set of benchmark programs. This paper describes the updated nanopass framework, the new compiler, and the results of our experiments. The compiler produces faster code than the original, averaging 15-27% depending on architecture and optimization level, due to a more sophisticated but slower register allocator and improvements to several optimizations. Compilation times average well within a factor of two of the original compiler, despite the slower register allocator and the replacement of five passes of the original 10 with over 50 nanopasses.},
 journal = {SIGPLAN Not.},
 month = {sep},
-pages = {343–350},
+pages = {343-350},
 numpages = {8},
 keywords = {scheme, nanopass, compiler}
 }
@@ -219,7 +214,7 @@ url = {https://doi-org.tudelft.idm.oclc.org/10.1145/2500365.2500618},
 doi = {10.1145/2500365.2500618},
 abstract = {Contemporary compilers must typically handle sophisticated high-level source languages, generate efficient code for multiple hardware architectures and operating systems, and support source-level debugging, profiling, and other program development tools. As a result, compilers tend to be among the most complex of software systems. Nanopass frameworks are designed to help manage this complexity. A nanopass compiler is comprised of many single-task passes with formally defined intermediate languages. The perceived downside of a nanopass compiler is that the extra passes will lead to substantially longer compilation times. To determine whether this is the case, we have created a plug replacement for the commercial Chez Scheme compiler, implemented using an updated nanopass framework, and we have compared the speed of the new compiler and the code it generates against the original compiler for a large set of benchmark programs. This paper describes the updated nanopass framework, the new compiler, and the results of our experiments. The compiler produces faster code than the original, averaging 15-27% depending on architecture and optimization level, due to a more sophisticated but slower register allocator and improvements to several optimizations. Compilation times average well within a factor of two of the original compiler, despite the slower register allocator and the replacement of five passes of the original 10 with over 50 nanopasses.},
 booktitle = {Proceedings of the 18th ACM SIGPLAN International Conference on Functional Programming},
-pages = {343–350},
+pages = {343-350},
 numpages = {8},
 keywords = {scheme, nanopass, compiler},
 location = {Boston, Massachusetts, USA},
@@ -248,4 +243,155 @@ month = {sep},
 pages = {201–212},
 numpages = {12},
 keywords = {domain-specific languages, syntactic abstraction, compiler writing tools, nanopass compilers}
+}
+
+
+@mastersthesis{dynamix,
+  author  = {Thijs Molendijk},
+  school  = {Delft University of Technology},
+  title   = {Dynamix: A Domain-Specific Language for Dynamic Semantics},
+  year    = {2022},
+  url = {http://resolver.tudelft.nl/uuid:8653ab24-a782-41f0-aefc-6b1c8d9a37d5}
+}
+
+@inproceedings{10.1145/3426425.3426928,
+author = {Smits, Jeff and Visser, Eelco},
+title = {Gradually Typing Strategies},
+year = {2020},
+isbn = {9781450381765},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3426425.3426928},
+doi = {10.1145/3426425.3426928},
+abstract = {The Stratego language supports program transformation by means of term rewriting with programmable rewriting strategies. Stratego's traversal primitives support concise definition of generic tree traversals. Stratego is a dynamically typed language because its features cannot be captured fully by a static type system. While dynamic typing makes for a flexible programming model, it also leads to unintended type errors, code that is harder to maintain, and missed opportunities for optimization. In this paper, we introduce a gradual type system for Stratego that combines the flexibility of dynamically typed generic programming, where needed, with the safety of statically declared and enforced types, where possible. To make sure that statically typed code cannot go wrong, all access to statically typed code from dynamically typed code is protected by dynamic type checks (casts). The type system is backwards compatible such that types can be introduced incrementally to existing Stratego programs. We formally define a type system for Core Gradual Stratego, discuss its implementation in a new type checker for Stratego, and present an evaluation of its impact on Stratego programs.},
+booktitle = {Proceedings of the 13th ACM SIGPLAN International Conference on Software Language Engineering},
+pages = {1–15},
+numpages = {15},
+keywords = {gradual types, type preserving, generic programming, strategy},
+location = {Virtual, USA},
+series = {SLE 2020}
+}
+
+@InProceedings{vergu_et_al:LIPIcs:2015:5208,
+  author =	{Vlad Vergu and Pierre Neron and Eelco Visser},
+  title =	{{DynSem: A DSL for Dynamic Semantics Specification}},
+  booktitle =	{26th International Conference on Rewriting Techniques and Applications (RTA 2015)},
+  pages =	{365--378},
+  series =	{Leibniz International Proceedings in Informatics (LIPIcs)},
+  ISBN =	{978-3-939897-85-9},
+  ISSN =	{1868-8969},
+  year =	{2015},
+  volume =	{36},
+  editor =	{Maribel Fern{\'a}ndez},
+  publisher =	{Schloss Dagstuhl--Leibniz-Zentrum fuer Informatik},
+  address =	{Dagstuhl, Germany},
+  URL =		{http://drops.dagstuhl.de/opus/volltexte/2015/5208},
+  URN =		{urn:nbn:de:0030-drops-52080},
+  doi =		{10.4230/LIPIcs.RTA.2015.365},
+  annote =	{Keywords: programming languages, dynamic semantics, reduction semantics, semantics engineering, IDE, interpreters, modularity}
+}
+
+
+@article{10.1145/3276484,
+author = {van Antwerpen, Hendrik and Bach Poulsen, Casper and Rouvoet, Arjen and Visser, Eelco},
+title = {Scopes as Types},
+year = {2018},
+issue_date = {November 2018},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+volume = {2},
+number = {OOPSLA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3276484},
+doi = {10.1145/3276484},
+abstract = {Scope graphs are a promising generic framework to model the binding structures of programming languages, bridging formalization and implementation, supporting the definition of type checkers and the automation of type safety proofs. However, previous work on scope graphs has been limited to simple, nominal type systems. In this paper, we show that viewing scopes as types enables us to model the internal structure of types in a range of non-simple type systems (including structural records and generic classes) using the generic representation of scopes. Further, we show that relations between such types can be expressed in terms of generalized scope graph queries. We extend scope graphs with scoped relations and queries. We introduce Statix, a new domain-specific meta-language for the specification of static semantics, based on scope graphs and constraints. We evaluate the scopes as types approach and the Statix design in case studies of the simply-typed lambda calculus with records, System F, and Featherweight Generic Java.},
+journal = {Proc. ACM Program. Lang.},
+month = {oct},
+articleno = {114},
+numpages = {30},
+keywords = {type checker, domain-specific language, static semantics, scope graphs, type system, name resolution}
+}
+
+@inproceedings{10.1145/3237009.3237018,
+author = {Vergu, Vlad and Visser, Eelco},
+title = {Specializing a Meta-Interpreter: JIT Compilation of Dynsem Specifications on the Graal VM},
+year = {2018},
+isbn = {9781450364249},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/3237009.3237018},
+doi = {10.1145/3237009.3237018},
+abstract = {DynSem is a domain-specific language for concise specification of the dynamic semantics of programming languages, aimed at rapid experimentation and evolution of language designs. DynSem specifications can be executed to interpret programs in the language under development. To enable fast turnaround during language development, we have developed a meta-interpreter for DynSem specifications, which requires minimal processing of the specification. In addition to fast development time, we also aim to achieve fast run times for interpreted programs.In this paper we present the design of a meta-interpreter for DynSem and report on experiments with JIT compiling the application of the meta-interpreter on the Graal VM. By interpreting specifications directly, we have minimal compilation overhead. By specializing pattern matches, maintaining call-site dispatch chains and using native control-flow constructs we gain significant run-time performance. We evaluate the performance of the meta-interpreter when applied to the Tiger language specification running a set of common benchmark programs. Specialization enables the Graal VM to JIT compile the meta-interpreter giving speedups of up to factor 15 over running on the standard Oracle Java VM.},
+booktitle = {Proceedings of the 15th International Conference on Managed Languages \& Runtimes},
+articleno = {16},
+numpages = {14},
+keywords = {dynamic semantics, interpretation, run-time optimization, JIT},
+location = {Linz, Austria},
+series = {ManLang '18}
+}
+
+@inproceedings{10.1145/1869459.1869497,
+author = {Kats, Lennart C.L. and Visser, Eelco},
+title = {The Spoofax Language Workbench: Rules for Declarative Specification of Languages and IDEs},
+year = {2010},
+isbn = {9781450302036},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/1869459.1869497},
+doi = {10.1145/1869459.1869497},
+abstract = {Spoofax is a language workbench for efficient, agile development of textual domain-specific languages with state-of-the-art IDE support. Spoofax integrates language processing techniques for parser generation, meta-programming, and IDE development into a single environment. It uses concise, declarative specifications for languages and IDE services. In this paper we describe the architecture of Spoofax and introduce idioms for high-level specifications of language semantics using rewrite rules, showing how analyses can be reused for transformations, code generation, and editor services such as error marking, reference resolving, and content completion. The implementation of these services is supported by language-parametric editor service classes that can be dynamically loaded by the Eclipse IDE, allowing new languages to be developed and used side-by-side in the same Eclipse environment.},
+booktitle = {Proceedings of the ACM International Conference on Object Oriented Programming Systems Languages and Applications},
+pages = {444-463},
+numpages = {20},
+keywords = {sglr, domain-specific language, meta-tooling, spoofax, sdf, stratego, dsl, eclipse, IDE, language workbench},
+location = {Reno/Tahoe, Nevada, USA},
+series = {OOPSLA '10}
+}
+
+@inproceedings{10.1145/91556.91592,
+author = {Wadler, Philip},
+title = {Comprehending Monads},
+year = {1990},
+isbn = {089791368X},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi-org.tudelft.idm.oclc.org/10.1145/91556.91592},
+doi = {10.1145/91556.91592},
+abstract = {Category theorists invented monads in the 1960's to concisely express certain aspects of universal algebra. Functional programmers invented list comprehensions in the 1970's to concisely express certain programs involving lists. This paper shows how list comprehensions may be generalised to an arbitrary monad, and how the resulting programming feature can concisely express in a pure functional language some programs that manipulate state, handle exceptions, parse text, or invoke continuations. A new solution to the old problem of destructive array update is also presented. No knowledge of category theory is assumed.},
+booktitle = {Proceedings of the 1990 ACM Conference on LISP and Functional Programming},
+pages = {61-78},
+numpages = {18},
+location = {Nice, France},
+series = {LFP '90}
+}
+
+@INPROCEEDINGS{39155,
+
+  author={Moggi, E.},
+
+  booktitle={[1989] Proceedings. Fourth Annual Symposium on Logic in Computer Science}, 
+
+  title={Computational lambda-calculus and monads}, 
+
+  year={1989},
+
+  volume={},
+
+  number={},
+
+  pages={14-23},
+
+  doi={10.1109/LICS.1989.39155}}
+
+@article{DEBRUIJN1972381,
+title = {Lambda calculus notation with nameless dummies, a tool for automatic formula manipulation, with application to the Church-Rosser theorem},
+journal = {Indagationes Mathematicae (Proceedings)},
+volume = {75},
+number = {5},
+pages = {381-392},
+year = {1972},
+issn = {1385-7258},
+doi = {https://doi.org/10.1016/1385-7258(72)90034-0},
+url = {https://www.sciencedirect.com/science/article/pii/1385725872900340},
+author = {N.G {de Bruijn}},
+abstract = {In ordinary lambda calculus the occurrences of a bound variable are made recognizable by the use of one and the same (otherwise irrelevant) name at all occurrences. This convention is known to cause considerable trouble in cases of substitution. In the present paper a different notational system is developed, where occurrences of variables are indicated by integers giving the “distance” to the binding λ instead of a name attached to that λ. The system is claimed to be efficient for automatic formula manipulation as well as for metalingual discussion. As an example the most essential part of a proof of the Church-Rosser theorem is presented in this namefree calculus.}
 }

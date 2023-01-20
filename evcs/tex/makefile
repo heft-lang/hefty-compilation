@@ -8,11 +8,14 @@ LATEXMK  = latexmk -r $(SRC)/latexmkrc
 
 all: document.pdf 
 
-document.pdf: build build/document.tex src/references.bib # $(SOURCES) src/references.bib
-	$(PDFLATEX) build/document.tex
-	bibtex build/document
-	$(PDFLATEX) build/document.tex
-	$(PDFLATEX) build/document.tex
+document.pdf: build build/document.tex $(SRC)/references.bib # $(SOURCES) src/references.bib
+	cp $(SRC)/references.bib build/references.bib
+	cd build
+	$(PDFLATEX) document.tex
+	bibtex document
+	$(PDFLATEX) document.tex
+	$(PDFLATEX) document.tex
+	cd ..
 	cp build/document.pdf document.pdf
 
 # Quick 'n dirty build, intended for use with watch script
