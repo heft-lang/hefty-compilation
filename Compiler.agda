@@ -353,12 +353,25 @@ ex0-6 = cataᴴ (const "") (pretty-imm ⋎ pretty-x86 ⋎ nil-Alg) (ex0-5 ⦃ St
 --  [x] Weaken let2set_Alg
 --  [x] Change let to have two higher-order arguments
 --  [x] Split out common structure of let2set_Alg
---  [x] Uniquify variables
+--  // [x] Uniquify variables
 --  [x] X86Var
 --  [x] Stack allocation → X86
---  [ ] More types than just ℤ (Intrinsically typed AST?)
 --  [ ] Bigger language (e.g. if statement)
---  [ ] Correctness proofs
+--  [ ] Register allocation (dataflow analysis)
+--  [ ] Correctness proofs (algebraic laws & definitional interpreters)
+--  [ ] How to deal non-local binding (e.g. modules and classes)?
+--         Maybe use an abstract binding type (see Jesper's blog) and we may need to change the Hefty tree type.
+--  [ ] How to do type checking (on AST or on Hefty tree)? Start with assuming the AST is type checked.
+--
+--  Is it worth the effort to make everything modular?
+--
+--  Range of input languages and output backends -> SLE
+--
+--  Aim for OOPSLA or SLE 2023
+--
+--  Calculating correct compilers paper requires reinventing the proof every time
+--  Can our approach allow us to reuse parts of the proof?
+--  Can we modularize their proofs?
 
 -- instance
 --   Negativeℤ : Negative ℤ

@@ -1,0 +1,310 @@
+Reasoning about effects using fusion
+
+TODO:
+
+* Try the new formulation
+* Try modularisation
+* Try splitting the handler into multiple (unfuse the handlers)
+
+
+effect Arith {
+	val :: Int -> c int !! Arith, H
+	add :: c int -> c int -> c int !! Arith, H
+}
+
+effect Stack {
+	push :: Int -> () !! Stack, H
+	pop :: c int !! Stack, H
+}
+
+effect ArithS {
+	addS :: c int !! ArithS, H
+}
+
+
+eval :: Expr -> Int !! H
+eval (Val n) = val n   --> push n
+eval (Add x y) =
+	eval x >>= \n ->     --> pop n
+	eval y >>= \m ->    --> pop m
+	add n m
+
+
+	-- pure (n + m)
+
+eval :: Expr -> Int !! Error, H
+eval Throw = throw
+eval (Catch x h) = catch (eval x) (eval h)
+
+( eval (Catch x h) = with { throw _ -> h } handle x )
+
+forall (m :: () !! Stack) m = comp 
+
+comp :: Expr -> () !! Stack, Error
+comp x = eval x >>= push
+
+
+comp = {
+	val n k -> push n >> k (inj ())
+	add _ _ k -> addS >> k (inj ())
+}
+
+with comp handle (eval (Add x y)) = eval (Add x y) >>= push
+
+Alg H (Free F)
+Alg H (Hefty H')
+
+hdl_exec (elab_exec (pass_comp (eval x))) = hdl_direct (elab_direct (eval x))
+
+elab_direct = { val n k -> k n ; add x y k = k (x + y) }
+
+	evalS (Val n)
+=	{ specification }
+	eval (Val n) >>=
+	push
+=
+	return n >>=
+	push
+=	{ definition of eval }
+	push n
+
+comp :: Expr -> () !! Stack
+comp :: Int !! Error -> () !! Error, Stack
+  
+comp (eval (Add x y)) = eval (Add x y)
+
+	comp (eval (Add x y))
+=
+	eval (Add x y) >>=
+	push
+=
+	eval x >>= \x' ->
+	eval y >>= \y' ->
+	push (x + y)
+=
+	eval x >>= \x' ->
+	eval y >>= \y' ->
+	push x' >>
+	push y' >>
+	pop >>= \y'' ->
+	pop >>= \x'' ->
+	push (x'' + y'')
+=
+	eval x >>= \x' ->
+	eval y >>= \y' ->
+	push x' >>
+	push y' >>
+	add
+=
+	eval x >>= \x' ->
+	push x' >>
+	eval y >>= \y' ->
+	push y' >>
+	add
+=
+	comp x
+	comp y
+	add
+
+
+	evalS (Add x y)
+=	{ specification }
+	eval (Add x y) >>=
+	push
+=	{ definition of eval } 
+	eval x >>= \x' ->
+	eval y >>= \y' ->
+	push (x' + y')
+=	{ (i) }
+	eval x >>= 
+	push >>
+	pop >>= \x' ->
+	eval y >>= \y' ->
+	push (x' + y')
+=	{ IH }
+	evalS x >>
+	pop >>= \x' ->
+	eval y >>= \y' ->
+	push (x' + y')
+=	{ eval-Stack orthogonality }
+	evalS x >>
+	eval y >>= \y' ->
+	pop >>= \x' ->
+	push (x' + y')
+=	{ (i) }
+	evalS x >>
+	eval y >>= 
+	push >>
+	pop >>= \y' ->
+	pop >>= \x' ->
+	push (x' + y')
+=	{ IH }
+	evalS x >>
+	evalS y >>
+	pop >>= \y' ->
+	pop >>= \x' ->
+	push (x' + y')
+=	{ definition of addS }
+	evalS x >>
+	evalS y >>
+	addS
+
+
+	evalS Throw
+=	{ specification }
+	eval Throw >>= \x ->
+	push x
+=	{ IH }
+	throw >>= \x ->
+	push x
+=	{ (iv) }
+	throw
+
+
+	evalS (Catch x h)
+=	{ specification }
+	eval (Catch x h) >>=
+	push
+=	{ definition of eval }
+	catch (eval x) (eval h) >>=
+	push
+=	{ (i) }
+	catch 
+		(eval x >>= push >> pop)
+		(eval h >>= push >> pop) >>=
+	push
+=	{ IH }
+	catch
+		(evalS x >> pop)
+		(evalS h >> pop) >>=
+	push
+=	{ (iii) }
+	catch (evalS x) (evalS h) >>
+	pop >>= 
+	push
+=	{ (ii) }
+	catch (evalS x) (evalS h) >>
+	return ()
+
+
+laws:
+
+(i) push x >> pop = pure x
+(ii) pop >>= push = pure ()
+(iii) catch (x >> op) (y >> op) = catch x y >> op (if op is orthogonal to Error)
+(iv) throw >> x = throw
+(v) catch throw y = y
+(vi) catch (pure x) y = pure x
+(vii) catch (op >> x) (op >> y) = op >> catch x y (if op is orthogonal to Error; this requires transactional behavior)
+
+local def:
+
+addS = 
+	pop >>= \x ->
+	pop >>= \y ->
+	push (x + y)
+
+--------------------------------------------------------------------------------
+
+	evalM (Val n)
+= 
+	return (eval (Val n))
+=
+	return n
+
+
+	evalM (Add x y)
+=
+	return (eval (Add x y))
+=
+	return (eval x + eval y)
+=
+	return (eval x) >>= \x' ->
+	push (x' + eval y)
+=
+	return (eval x) >>= \x' ->
+	return (eval y) >>= \y' ->
+	return (x' + y')
+=
+	return (eval x) >>= \x' ->
+	return (eval y) >>= \y' ->
+	addS x' y'
+=
+	evalM x >>= \x' ->
+	evalM y >>= \y' ->
+	return (x' + y')
+
+
+
+-------------------------------------------------------------------------------
+
+
+effect Source {
+	val : Int -> c int !! Source, H
+	add : c int -> c int -> c int !! Source, H
+}
+
+effect Target {
+	push : Int -> () !! Target, H
+	addT : () !! Target, H
+}
+
+elab_direct : Int !! Source -> Int ! ()
+elab_direct x = with { (val n) k -> k n ; (add n m) k -> k (n + m) } elaborate x
+
+hdl_direct : Int ! () -> Int
+hdl_direct x = with {} handle x
+
+denote : Expr -> c int !! Source
+denote (Val n) = val n
+denote (Add n m) = denote n >>= \x -> denote m >>= \y -> add x y
+
+comp : c int !! Source -> c int !! Target
+
+elab_exec : Int !! Target -> Int ! TargetF
+
+hdl_exec : Int ! TargetF -> Int
+
+hdl_exec (elab_exec (comp x >>= k))) = 
+  hdl_exec (elab_exec (push (hdl_direct (elab_direct x)) >>= k))
+
+
+
+	hdl_exec (elab_exec (comp (val n)))
+= { monad laws }
+	hdl_exec (elab_exec (comp (val n) >>= return))
+= { specification }
+	hdl_exec (elab_exec (push (hdl_direct (elab_direct (val n))) >>= return))
+= { monad laws }
+	hdl_exec (elab_exec (push (hdl_direct (elab_direct (val n)))))
+= { definition of elab_direct }
+	hdl_exec (elab_exec (push (hdl_direct n)))
+= { definition of hdl_direct }
+	hdl_exec (elab_exec (push n))
+
+So
+
+	comp (val n) = push n
+
+
+	hdl_exec (elab_exec (comp (add x y)))
+= { monad laws }
+	hdl_exec (elab_exec (comp (add x y) >>= return))
+= { specification }
+	hdl_exec (elab_exec (push (hdl_direct (elab_direct (add x y))) >>= return))
+= { monad laws }
+	hdl_exec (elab_exec (push (hdl_direct (elab_direct (add x y)))))
+= { defn elab_direct }
+	hdl_exec (elab_exec (push (hdl_direct (x + y))))
+= { defn hdl_direct }
+	hdl_exec (elab_exec (push (x + y)))
+
+
+
+	hdl_exec (elab_exec (comp (add x y)))
+=
+	hdl_exec (elab_exec (push ))
+=
+	...
+=
+	hdl_direct (elab_direct (add x y))
