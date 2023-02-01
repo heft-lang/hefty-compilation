@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -6,31 +5,37 @@
 {-# HLINT ignore "Use newtype instead of data" #-}
 {-# HLINT ignore "Use const" #-}
 {-# HLINT ignore "Use >=>" #-}
+{-# LANGUAGE GADTs #-}
 
 import Hefty
 import Hefty.Algebraic
-import Prelude hiding (Read)
+import Prelude hiding (Read, read)
 
-data Arith c k
-  = Add (c Int) (c Int) (c Int -> k)
-  | Sub (c Int) (c Int) (c Int -> k)
-  | Mul (c Int) (c Int) (c Int -> k)
-  | Int Int (c Int -> k)
+data Arith c a where
+  Add :: c Int -> c Int -> Arith c (c Int)
+  Sub :: c Int -> c Int -> Arith c (c Int)
+  Mul :: c Int -> c Int -> Arith c (c Int)
+  Int :: Int -> Arith c (c Int)
 
-add, sub, mul :: (Algebraic eff, In eff (Arith c) f) => c Int -> c Int -> eff f (c Int)
+add, sub, mul :: In eff (Arith c) f => c Int -> c Int -> eff f (c Int)
 add x y = lift (Add x y)
 sub x y = lift (Sub x y)
 mul x y = lift (Mul x y)
 
-int :: (Algebraic eff, In eff (Arith c) f) => Int -> eff f (c Int)
+int :: In eff (Arith c) f => Int -> eff f (c Int)
 int x = lift (Int x)
 
-data Read c k = Read (c Int -> k)
+data Read c a where
+  Read :: Read c (c Int)
 
-read :: (Algebraic eff, In eff (Read c) f) => eff f (c Int)
+read :: In eff (Read c) f => eff f (c Int)
 read = lift Read
 
 data Let c m k = Let (m (c Int)) (c Int -> m (c Int)) (c Int -> k)
+  deriving Functor
+
+instance HFunctor (Let c) where
+  hmap f (Let m b k) = Let (f m) (f . b) k
 
 let' :: (Let c << h) => Hefty h (c Int) -> (c Int -> Hefty h (c Int)) -> Hefty h (c Int)
 let' m f = Op $ injH $ Let m f Return
@@ -39,68 +44,79 @@ data Label
 
 data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
 
-data X86 c k
-  = Reg Reg (c Int -> k)
-  | Deref Reg Int (c Int -> k)
-  | Imm Int (c Int -> k)
-  | Addq (c Int) (c Int) k
-  | Subq (c Int) (c Int) k
-  | Mulq (c Int) (c Int) k
-  | Movq (c Int) (c Int) k
-  | Callq (c Label) k
+data X86 c a where
+  Reg :: Reg -> X86 c (c Int)
+  Deref :: Reg -> Int -> X86 c (c Int)
+  Imm :: Int -> X86 c (c Int)
+  Addq :: c Int -> c Int -> X86 c ()
+  Subq :: c Int -> c Int -> X86 c ()
+  Mulq :: c Int -> c Int -> X86 c ()
+  Movq :: c Int -> c Int -> X86 c ()
+  Callq :: c Label -> X86 c ()
 
-reg :: (Algebraic eff, In eff (X86 c) f) => Reg -> eff f (c Int)
+reg :: In eff (X86 c) f => Reg -> eff f (c Int)
 reg r = lift (Reg r)
 
-deref :: (Algebraic eff, In eff (X86 c) f) => Reg -> Int -> eff f (c Int)
+deref :: In eff (X86 c) f => Reg -> Int -> eff f (c Int)
 deref r n = lift (Deref r n)
 
-imm :: (Algebraic eff, In eff (X86 c) f) => Int -> eff f (c Int)
+imm :: In eff (X86 c) f => Int -> eff f (c Int)
 imm n = lift (Imm n)
 
-addq, subq, mulq, movq :: (Algebraic eff, In eff (X86 c) f) => c Int -> c Int -> eff f ()
-addq x y = lift $ \k -> Addq x y (k ())
-subq x y = lift $ \k -> Subq x y (k ())
-mulq x y = lift $ \k -> Mulq x y (k ())
-movq x y = lift $ \k -> Movq x y (k ())
+addq, subq, mulq, movq :: In eff (X86 c) f => c Int -> c Int -> eff f ()
+addq x y = lift (Addq x y)
+subq x y = lift (Subq x y)
+mulq x y = lift (Mulq x y)
+movq x y = lift (Movq x y)
 
-callq :: (Algebraic eff, In eff (X86 c) f) => c Label -> eff f ()
-callq l = lift $ \k -> Callq l (k ())
+callq :: In eff (X86 c) f => c Label -> eff f ()
+callq l = lift (Callq l)
 
-newtype X86Var c k = X86Var (c Int -> k)
+data X86Var c a where
+  X86Var :: X86Var c (c Int)
 
-x86var :: (Algebraic eff, In eff (X86Var c) f) => eff f (c Int)
+x86var :: In eff (X86Var c) f => eff f (c Int)
 x86var = lift X86Var
 
 arithAlg :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) => Alg (Lift (Arith c)) (Hefty h)
-arithAlg = Alg \(Lift l) -> case l of
-  Int n k -> imm n >>= k
-  Add x y k -> x86var >>= \z -> movq y z >> addq x z >> k z
-  Sub x y k -> x86var >>= \z -> movq y z >> subq x z >> k z
-  Mul x y k -> x86var >>= \z -> movq y z >> mulq x z >> k z
+arithAlg = Alg \(Lift l k) -> case l of
+  Int n -> imm n >>= k
+  Add x y -> x86var >>= \z -> movq y z >> addq x z >> k z
+  Sub x y -> x86var >>= \z -> movq y z >> subq x z >> k z
+  Mul x y -> x86var >>= \z -> movq y z >> mulq x z >> k z
 
 readAlg :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) => c Label -> Alg (Lift (Read c)) (Hefty h)
-readAlg read_int = Alg \(Lift l) -> case l of
-  Read k -> x86var >>= \z -> callq read_int >> reg Rax >>= \rax -> movq rax z >> k z
+readAlg read_int = Alg \(Lift l k) -> case l of
+  Read -> x86var >>= \z -> callq read_int >> reg Rax >>= \rax -> movq rax z >> k z
 
 letAlg :: HFunctor h => Alg (Let c) (Hefty h)
 letAlg = Alg \case
   Let m f k -> m >>= \x -> f x >>= k
 
-pass1 :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) =>
-  c Label -> Alg ((Lift (Arith c) ++ Lift (Read c)) ++ Let c) (Hefty h)
-pass1 read_int = arithAlg ++~ readAlg read_int ++~ letAlg
+pass1 :: forall c h a. (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) =>
+  c Label -> Hefty (Lift (Arith c) ++ (Lift (Read c) ++ Let c)) a -> Hefty h a
+pass1 read_int = foldH pure (arithAlg ++~ readAlg read_int ++~ letAlg)
 
--- TODO: implement countvars
--- 
--- countVars : ({op : Op (Lift ε)} → Ret ε op) → Alg (Lift ε) (const ℕ)
--- alg (countVars def) op _ k = 1 + k def
+newtype Const x a = Const { unConst :: x }
+
+countVars :: Alg (Lift (X86Var (Const ()))) (Const Int)
+countVars = Alg \(Lift l k) -> case l of
+  X86Var -> Const (1 + unConst (k (Const ())))
+
+-- Ideally we would have a version of countvars that ignores all other effects, but writing that generically
+-- requires us to modify the Hefty type or introduce a type class to get access to the continuation.
 
 newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
 
 assignHomes :: (HFunctor h, Lift (X86 c) << h) => Alg (Lift (X86Var c)) (ReaderT Int (Hefty h))
-assignHomes = Alg \(Lift l) -> case l of
-  X86Var k -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (k z) (n + 1)
+assignHomes = Alg \(Lift l k) -> case l of
+  X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (k z) (n + 1)
+
+liftReaderTAlg :: (HFunctor h, Functor (h (ReaderT r m))) => Alg h m -> Alg h (ReaderT r m)
+liftReaderTAlg (Alg x) = Alg \y -> ReaderT \r -> x (hmap (\y -> runReaderT y r) $ fmap (\y -> runReaderT y r) $ y)
+
+pass2 :: forall c h a. (HFunctor h, Lift (X86 c) << h) => Hefty (Lift (X86Var c) ++ Lift (X86 c)) a -> Hefty h a
+pass2 x = runReaderT (foldH (ReaderT . const . pure) (assignHomes ++~ liftReaderTAlg nopAlg) x) 1
 
 prettyReg :: Reg -> String
 prettyReg Rax = "%rax"
@@ -112,22 +128,28 @@ prettyReg Rdx = "%rdx"
 prettyReg Rdi = "%rdi"
 prettyReg Rsi = "%rsi"
 
--- TODO: implement pretty printing
---
---   pretty-x86 : Alg (Lift X86) (λ _ → String)
---   pretty-x86 = mkAlg λ
---     { (reg r) _ k → k (showReg r)
---     ; (deref r i) _ k → k (ℤShow.show i ++ "(" ++ showReg r ++ ")")
---     ; (imm n) _ k -> ...
---     ; (addq x y) _ k → "addq " ++ x ++ ", " ++ y ++ "\n" ++ k tt
---     ; (subq x y) _ k → "subq " ++ x ++ ", " ++ y ++ "\n" ++ k tt
---     ; (negq x) _ k → "negq " ++ x ++ "\n" ++ k tt
---     ; (movq x y) _ k → "movq " ++ x ++ ", " ++ y ++ "\n" ++ k tt 
---     ; (callq l) _ k → "callq " ++ l ++ "\n" ++ k tt 
---     }
+prettyX86 :: Alg (Lift (X86 (Const String))) (Const String)
+prettyX86 = Alg \(Lift op k) -> case op of
+  Reg r -> k (Const (prettyReg r))
+  Deref r i -> k (Const (show i ++ "(" ++ prettyReg r ++ ")"))
+  Imm n -> k (Const ("$" ++ show n))
+  Addq x y -> Const $ "addq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
+  Subq x y -> Const $ "subq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
+  Mulq x y -> Const $ "mulq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
+  Movq x y -> Const $ "movq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
+  Callq lab -> Const $ "callq " ++ unConst lab ++ "\n" ++ unConst (k ())
+
+pass3 :: Hefty (Lift (X86 (Const String))) (Const String a)-> String
+pass3 =  unConst . foldH (const (Const "")) prettyX86
 
 main :: IO ()
-main = pure ()
+main = putStrLn $ (pass3 . pass2 @(Const String) . pass1 (Const "_read_int")) do
+  x <- int 1
+  let' read \y -> do
+    z <- read
+    w <- mul x z
+    v <- add y w
+    sub y v
 
 -- TODO:
 -- [x] Weaken let2set_Alg
