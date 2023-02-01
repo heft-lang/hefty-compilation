@@ -1,0 +1,86 @@
+-- vi:syntax=lhaskell
+
+Keeping points separate
+
+We have a language to talk specifically about points.
+
+It's sole purpose is to worry about variables/bindings.
+
+> data Program m a where
+>   Var :: !Int -> Program m a
+> 
+>   -- Sequencing
+>   Seq  :: Program m a -> Program m b -> Program m b
+>   Bind :: Program m a -- Γ    ⊢ a
+>        -> Program m b -- Γ, a ⊢ b
+>        -> Program m b -- Γ    ⊢ b
+> 
+>   -- Embedding recipes
+>   Apply :: !(Recipe m a b) -> Program m a -> Program m b
+> 
+>   -- ...
+
+---
+
+Programs & environments
+
+> runProgramIn :: (Monad m, AchilleIO m)
+>   => Env -> Program m a -> PrimTask m (Value a)
+>   
+> runProgramIn env t = case t of
+> 
+>   Var k   -> maybe halt pure $ lookupEnv env k
+>   
+>   Bind x f -> do
+>     (cx, cf) <- splitCache
+>     (vx, cx) <- withCache cx $ runProgramIn env x
+>     let env' = maybe env (bindEnv env) vx
+>     (vy, cf) <- withCache cf $ runProgramIn env' f
+>     joinCache cx cf
+>     forward vy
+>   
+>   Seq x y -> -- run in parallel
+>   
+>   -- ...
+
+---
+
+HOAS (à la Atkey)
+
+> newtype Task m a = T { unT :: Int -> (Program m a, IntSet) }
+>
+> (>>) :: Task m a -> Task m b -> Task m b
+> T x >> T y = T \n ->
+>   let (x', vsx) = x n
+>       (y', vsy) = y n
+>   in (Seq x' y', vsx <> vsy)
+>   
+> (>>=) :: Task m a -> (Task m a -> Task m b) -> Task m b
+> (>>=) (T x) f = T \n ->
+>   let (x', vsx) = x n
+>       (f', vsf) =
+>       	unT (f $ T \_ -> const (Var n, singleton n))
+>             (n + 1)
+>   in (Bind x' f', vsx <> vsf)
+
+---
+
+Abusing do notation
+
+Now that we have (>>) and (>>=), we can abuse the do notation to bind variables:
+
+> {-# LANGUAGE QualifiedDo #-}
+> 
+> import Achille as A
+> 
+> main = achille A.do
+>   doStuff
+>   thing <- doThing
+>   match "thing" \src ->
+>     doFoo src thing
+> 
+> main = achille $
+>   doStuff A.>> 
+>   doThing A.>>= \thing -> 
+>   match "thing" \src -> 
+>     doFoo src thing
