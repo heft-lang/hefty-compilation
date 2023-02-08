@@ -1,10 +1,14 @@
+{-# LANGUAGE GADTs #-}
 module Hefty.Compilation.Read where
 
 import Prelude hiding (Read)
-import Hefty.Algebraic
+import Hefty
 
-data Read c a where
-  Read :: Read c (c Int)
+data Read c m a where
+  Read :: Read c m (c Int)
 
-read :: In eff (Read c) f => eff f (c Int)
-read = lift Read
+instance HFunctor (Read c) where
+  hmap _ Read = Read
+
+read :: Read c << h => Hefty h (c Int)
+read = send Read

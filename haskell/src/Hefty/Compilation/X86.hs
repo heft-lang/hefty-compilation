@@ -1,48 +1,61 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE GADTs, AllowAmbiguousTypes #-}
 module Hefty.Compilation.X86 where
 
-import Hefty.Algebraic
+import Hefty
 import Hefty.Compilation.Common
 
 data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
 
-data X86 c a where
-  Reg :: Reg -> X86 c (c Int)
-  Deref :: Reg -> Int -> X86 c (c Int)
-  Imm :: Int -> X86 c (c Int)
-  Addq :: c Int -> c Int -> X86 c ()
-  Subq :: c Int -> c Int -> X86 c ()
-  Negq :: c Int -> X86 c ()
-  Movq :: c Int -> c Int -> X86 c ()
-  Callq :: c Label -> X86 c ()
+data X86 c m a where
+  Reg :: Reg -> X86 c m (c Int)
+  Deref :: Reg -> Int -> X86 c m (c Int)
+  Imm :: Int -> X86 c m (c Int)
+  Addq :: c Int -> c Int -> X86 c m ()
+  Subq :: c Int -> c Int -> X86 c m ()
+  Negq :: c Int -> X86 c m ()
+  Movq :: c Int -> c Int -> X86 c m ()
+  Callq :: c Label -> X86 c m ()
 
-  Pushq :: c Int -> X86 c ()
-  Popq :: c Int -> X86 c ()
-  Retq :: X86 c a
+  Pushq :: c Int -> X86 c m ()
+  Popq :: c Int -> X86 c m ()
+  Retq :: X86 c m a
 
-reg :: In eff (X86 c) f => Reg -> eff f (c Int)
-reg r = lift (Reg r)
+instance HFunctor (X86 c) where
+  hmap _ (Reg r) = Reg r
+  hmap _ (Deref r i) = Deref r i
+  hmap _ (Imm n) = Imm n
+  hmap _ (Addq x y) = Addq x y
+  hmap _ (Subq x y) = Subq x y
+  hmap _ (Negq x) = Negq x
+  hmap _ (Movq x y) = Movq x y
+  hmap _ (Callq l) = Callq l
+  hmap _ (Pushq x) = Pushq x
+  hmap _ (Popq x) = Popq x
+  hmap _ Retq = Retq
 
-deref :: In eff (X86 c) f => Reg -> Int -> eff f (c Int)
-deref r n = lift (Deref r n)
+reg :: X86 c << h => Reg -> Hefty h (c Int)
+reg r = send (Reg r)
 
-imm :: In eff (X86 c) f => Int -> eff f (c Int)
-imm n = lift (Imm n)
+deref :: X86 c << h => Reg -> Int -> Hefty h (c Int)
+deref r n = send (Deref r n)
 
-addq, subq, movq :: In eff (X86 c) f => c Int -> c Int -> eff f ()
-addq x y = lift (Addq x y)
-subq x y = lift (Subq x y)
-movq x y = lift (Movq x y)
+imm :: X86 c << h => Int -> Hefty h (c Int)
+imm n = send (Imm n)
 
-negq :: In eff (X86 c) f => c Int -> eff f ()
-negq x = lift (Negq x)
+addq, subq, movq :: X86 c << h => c Int -> c Int -> Hefty h ()
+addq x y = send (Addq x y)
+subq x y = send (Subq x y)
+movq x y = send (Movq x y)
 
-callq :: In eff (X86 c) f => c Label -> eff f ()
-callq l = lift (Callq l)
+negq :: X86 c << h => c Int -> Hefty h ()
+negq x = send (Negq x)
 
-pushq, popq :: In eff (X86 c) f => c Int -> eff f ()
-pushq x = lift (Pushq x)
-popq x = lift (Popq x)
+callq :: X86 c << h => c Label -> Hefty h ()
+callq l = send (Callq l)
 
-retq :: forall c eff f a. In eff (X86 c) f => eff f a
-retq = lift (Retq @c)
+pushq, popq :: X86 c << h => c Int -> Hefty h ()
+pushq x = send (Pushq x)
+popq x = send (Popq x)
+
+retq :: forall c h a. X86 c << h => Hefty h a
+retq = send (Retq @c)
