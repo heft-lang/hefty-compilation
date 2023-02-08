@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-cabal build
+set -e
+cabal build exes
 mkdir -p build/
 cabal run > build/test.s
 as build/test.s -o build/test.o

@@ -12,142 +12,31 @@ import Hefty hiding (L)
 import Hefty.Algebraic
 import Prelude hiding (Read, read)
 
-data Arith c a where
-  Add :: c Int -> c Int -> Arith c (c Int)
-  Sub :: c Int -> c Int -> Arith c (c Int)
-  Neg :: c Int -> Arith c (c Int)
-  Int :: Int -> Arith c (c Int)
-
-add, sub :: In eff (Arith c) f => c Int -> c Int -> eff f (c Int)
-add x y = lift (Add x y)
-sub x y = lift (Sub x y)
-
-neg :: In eff (Arith c) f => c Int -> eff f (c Int)
-neg x = lift (Neg x)
-
-int :: In eff (Arith c) f => Int -> eff f (c Int)
-int x = lift (Int x)
-
-data Read c a where
-  Read :: Read c (c Int)
-
-read :: In eff (Read c) f => eff f (c Int)
-read = lift Read
-
-data Let c m k = Let (m (c Int)) (c Int -> m (c Int)) (c Int -> k)
-  deriving Functor
-
-instance HFunctor (Let c) where
-  hmap f (Let m b k) = Let (f m) (f . b) k
-
-let' :: (Let c << h) => Hefty h (c Int) -> (c Int -> Hefty h (c Int)) -> Hefty h (c Int)
-let' m f = Op $ injH $ Let m f Return
-
-data Label = L String
-
-data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
-
-data X86 c a where
-  Reg :: Reg -> X86 c (c Int)
-  Deref :: Reg -> Int -> X86 c (c Int)
-  Imm :: Int -> X86 c (c Int)
-  Addq :: c Int -> c Int -> X86 c ()
-  Subq :: c Int -> c Int -> X86 c ()
-  Negq :: c Int -> X86 c ()
-  Movq :: c Int -> c Int -> X86 c ()
-  Callq :: c Label -> X86 c ()
-
-  Pushq :: c Int -> X86 c ()
-  Popq :: c Int -> X86 c ()
-  Retq :: X86 c a
-
-reg :: In eff (X86 c) f => Reg -> eff f (c Int)
-reg r = lift (Reg r)
-
-deref :: In eff (X86 c) f => Reg -> Int -> eff f (c Int)
-deref r n = lift (Deref r n)
-
-imm :: In eff (X86 c) f => Int -> eff f (c Int)
-imm n = lift (Imm n)
-
-addq, subq, movq :: In eff (X86 c) f => c Int -> c Int -> eff f ()
-addq x y = lift (Addq x y)
-subq x y = lift (Subq x y)
-movq x y = lift (Movq x y)
-
-negq :: In eff (X86 c) f => c Int -> eff f ()
-negq x = lift (Negq x)
-
-callq :: In eff (X86 c) f => c Label -> eff f ()
-callq l = lift (Callq l)
-
--- label :: In eff (X86 c) f => String -> eff f (c Label)
--- label l = lift (Label l)
-
--- globl, block :: In eff (X86 c) f => c Label -> eff f ()
--- globl l = lift (Globl l)
--- block l = lift (Block l)
-
-pushq, popq :: In eff (X86 c) f => c Int -> eff f ()
-pushq x = lift (Pushq x)
-popq x = lift (Popq x)
-
--- jmp :: In eff (X86 c) f => c Label -> eff f ()
--- jmp l = lift (Jmp l)
-
-retq :: forall c eff f a. In eff (X86 c) f => eff f a
-retq = lift (Retq @c)
-
-data Block m k
-  = Blocks [(Label, m ())] k
-  | Jmp Label
-  | Globl Label k
-  deriving Functor
-
-instance HFunctor Block where
-  hmap f (Blocks xs k) = Blocks (fmap (\(x,y) -> (x, f y)) xs) k
-  hmap _ (Jmp lbl) = Jmp lbl
-  hmap _ (Globl lbl k) = Globl lbl k
-
-blocks :: Block << h => [(Label, Hefty h ())] -> Hefty h ()
-blocks blks = Op $ injH $ Blocks blks (Return ())
-
-jmp :: Block << h => Label -> Hefty h a
-jmp lbl = Op $ injH $ Jmp lbl
-
-globl :: Block << h => Label -> Hefty h ()
-globl lbl = Op $ injH $ Globl lbl (Return ())
-
-data X86Var c a where
-  X86Var :: X86Var c (c Int)
-
-x86var :: In eff (X86Var c) f => eff f (c Int)
-x86var = lift X86Var
+import Hefty.Compilation
 
 arithAlg :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) => Alg (Lift (Arith c)) (Hefty h)
-arithAlg = Alg \(Lift l k) -> case l of
+arithAlg = Alg \(Lift l) k -> case l of
   Int n -> imm n >>= k
   Add x y -> x86var >>= \z -> movq y z >> addq x z >> k z
   Sub x y -> x86var >>= \z -> movq y z >> subq x z >> k z
   Neg x -> x86var >>= \z -> movq x z >> negq z >> k z
 
 readAlg :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) => c Label -> Alg (Lift (Read c)) (Hefty h)
-readAlg read_int = Alg \(Lift l k) -> case l of
+readAlg read_int = Alg \(Lift l) k -> case l of
   Read -> x86var >>= \z -> callq read_int >> reg Rax >>= \rax -> movq rax z >> k z
 
 letAlg :: HFunctor h => Alg (Let c) (Hefty h)
-letAlg = Alg \case
-  Let m f k -> m >>= \x -> f x >>= k
+letAlg = Alg \op k -> case op of
+  Let m f -> m >>= \x -> f x >>= k
 
-pass1 :: forall c h a. (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) =>
+selectInstructions :: forall c h a. (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) =>
   c Label -> Hefty (Lift (Arith c) ++ (Lift (Read c) ++ Let c)) a -> Hefty h a
-pass1 read_int = foldH pure (arithAlg ++~ readAlg read_int ++~ letAlg)
+selectInstructions read_int = foldH pure (arithAlg ++~ readAlg read_int ++~ letAlg)
 
 newtype Const x a = Const { unConst :: x }
 
-
 countVars :: Alg (Lift (X86Var (Const ()))) (Const Int)
-countVars = Alg \(Lift l k) -> case l of
+countVars = Alg \(Lift l) k -> case l of
   X86Var -> Const (1 + unConst (k (Const ())))
 
 -- Ideally we would have a version of countvars that ignores all other effects, but writing that generically
@@ -155,15 +44,15 @@ countVars = Alg \(Lift l k) -> case l of
 
 newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
 
-assignHomes :: (HFunctor h, Lift (X86 c) << h) => Alg (Lift (X86Var c)) (ReaderT Int (Hefty h))
-assignHomes = Alg \(Lift l k) -> case l of
+assignHomesAlg :: (HFunctor h, Lift (X86 c) << h) => Alg (Lift (X86Var c)) (ReaderT Int (Hefty h))
+assignHomesAlg = Alg \(Lift l) k -> case l of
   X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (k z) (n + 1)
 
-liftReaderTAlg :: (HFunctor h, Functor (h (ReaderT r m))) => Alg h m -> Alg h (ReaderT r m)
-liftReaderTAlg (Alg x) = Alg \y -> ReaderT \r -> x (hmap (\z -> runReaderT z r) $ fmap (\z -> runReaderT z r) $ y)
+liftReaderTAlg :: HFunctor h => Alg h m -> Alg h (ReaderT r m)
+liftReaderTAlg (Alg a) = Alg \op k -> ReaderT \r -> a (hmap (\z -> runReaderT z r) op) ((\z -> runReaderT z r) . k)
 
-pass2 :: forall c h a. (HFunctor h, Lift (X86 c) << h) => Hefty (Lift (X86Var c) ++ Lift (X86 c)) a -> Hefty h a
-pass2 x = runReaderT (foldH (ReaderT . const . pure) (assignHomes ++~ liftReaderTAlg nopAlg) x) 1
+assignHomes :: forall c h a. (HFunctor h, Lift (X86 c) << h) => Hefty (Lift (X86Var c) ++ Lift (X86 c)) a -> Hefty h a
+assignHomes x = runReaderT (foldH (ReaderT . const . pure) (assignHomesAlg ++~ liftReaderTAlg nopAlg) x) 1
 
 data Patch c a where
   Mem :: c Int -> Patch c Int
@@ -177,7 +66,7 @@ patchOp :: In eff (X86 c) f => (c Int -> c Int -> eff f a) -> c Int -> c Int -> 
 patchOp op x y k = reg Rax >>= \z -> movq x z >> op z y >> k ()
 
 patchX86 :: forall h c. (HFunctor h, Lift (X86 c) << h) => Alg (Lift (X86 (Patch c))) (Hefty h)
-patchX86 = Alg \(Lift op k) -> case op of
+patchX86 = Alg \(Lift op) k -> case op of
   Addq (Mem x) (Mem y) -> patchOp addq x y k
   Subq (Mem x) (Mem y) -> patchOp subq x y k
   Movq (Mem x) (Mem y) -> patchOp movq x y k
@@ -195,11 +84,11 @@ patchX86 = Alg \(Lift op k) -> case op of
   Popq x -> popq (unpatch x) >>= k
   Retq -> retq @c
 
-pass25 :: forall c a. Hefty (Lift (X86 (Patch c))) (Patch c a) -> Hefty (Lift (X86 c)) (c a)
-pass25 = fmap unpatch . foldH pure patchX86
+patchInstructions :: forall c a. Hefty (Lift (X86 (Patch c))) (Patch c a) -> Hefty (Lift (X86 c)) (c a)
+patchInstructions = fmap unpatch . foldH pure patchX86
 
-pass3 :: forall c. Int -> Hefty (Lift (X86 c)) (c Int) -> Hefty (Block ++ Lift (X86 c)) ()
-pass3 stackSize x = do
+preludeAndConclusion :: forall c. Int -> Hefty (Lift (X86 c)) (c Int) -> Hefty (Block ++ Lift (X86 c)) ()
+preludeAndConclusion stackSize x = do
   rbp <- reg @_ @c Rbp
   rsp <- reg Rsp
   rax <- reg Rax
@@ -232,7 +121,7 @@ prettyReg Rdi = "%rdi"
 prettyReg Rsi = "%rsi"
 
 prettyX86 :: Alg (Lift (X86 (Const String))) (Const String)
-prettyX86 = Alg \(Lift op k) -> case op of
+prettyX86 = Alg \(Lift op) k -> case op of
   Reg r -> k $ Const $ prettyReg r
   Deref r i -> k $ Const $ show i ++ "(" ++ prettyReg r ++ ")"
   Imm n -> k $ Const $ "$" ++ show n
@@ -247,18 +136,18 @@ prettyX86 = Alg \(Lift op k) -> case op of
   Retq -> Const "retq\n"
 
 prettyBlock :: Alg Block (Const String)
-prettyBlock = Alg \case
-  Blocks blks k -> Const $ foldr (\(L lbl, x) xs -> lbl ++ ":\n" ++ unConst x ++ xs) "" blks ++ unConst k
+prettyBlock = Alg \op k -> case op of
+  Blocks blks -> Const $ foldr (\(L lbl, x) xs -> lbl ++ ":\n" ++ unConst x ++ xs) "" blks ++ unConst (k ())
   Jmp (L lbl) -> Const $ "jmp " ++ lbl ++ "\n"
-  Globl (L lbl) k -> Const $ ".globl " ++ lbl ++ "\n" ++ unConst k
+  Globl (L lbl) -> Const $ ".globl " ++ lbl ++ "\n" ++ unConst (k ())
 
-pass4 :: Hefty (Block ++ Lift (X86 (Const String))) () -> String
-pass4 =  unConst . foldH (\_ -> Const "") (prettyBlock ++~ prettyX86)
+prettyPrint :: Hefty (Block ++ Lift (X86 (Const String))) () -> String
+prettyPrint =  unConst . foldH (\_ -> Const "") (prettyBlock ++~ prettyX86)
 
--- TODO: Use countVars for pass3
+-- TODO: Use countVars for preludeAndConclusion
 
 main :: IO ()
-main = putStrLn $ (pass4 . pass3 48 . pass25 . pass2 @(Patch (Const String)) . pass1 (Loc (Const "_read_int"))) do
+main = putStrLn $ (prettyPrint . preludeAndConclusion 48 . patchInstructions . assignHomes @(Patch (Const String)) . selectInstructions (Loc (Const "_read_int"))) do
   let' read \y -> do
     z <- read
     w <- neg z
@@ -274,6 +163,7 @@ main = putStrLn $ (pass4 . pass3 48 . pass25 . pass2 @(Patch (Const String)) . p
 -- [x] Stack allocation → X86
 -- [ ] Bigger language (e.g. if statement)
 -- [ ] Register allocation (dataflow analysis)
+-- [ ] Definitional interpreters
 -- [ ] Correctness proofs (algebraic laws & definitional interpreters)
 -- [ ] How to deal non-local binding (e.g. modules and classes)?
 --        Maybe use an abstract binding type (see Jesper's blog) and we may need to change the Hefty tree type.
