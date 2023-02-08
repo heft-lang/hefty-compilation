@@ -6,21 +6,24 @@
 {-# HLINT ignore "Use const" #-}
 {-# HLINT ignore "Use >=>" #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
-import Hefty
+import Hefty hiding (L)
 import Hefty.Algebraic
 import Prelude hiding (Read, read)
 
 data Arith c a where
   Add :: c Int -> c Int -> Arith c (c Int)
   Sub :: c Int -> c Int -> Arith c (c Int)
-  Mul :: c Int -> c Int -> Arith c (c Int)
+  Neg :: c Int -> Arith c (c Int)
   Int :: Int -> Arith c (c Int)
 
-add, sub, mul :: In eff (Arith c) f => c Int -> c Int -> eff f (c Int)
+add, sub :: In eff (Arith c) f => c Int -> c Int -> eff f (c Int)
 add x y = lift (Add x y)
 sub x y = lift (Sub x y)
-mul x y = lift (Mul x y)
+
+neg :: In eff (Arith c) f => c Int -> eff f (c Int)
+neg x = lift (Neg x)
 
 int :: In eff (Arith c) f => Int -> eff f (c Int)
 int x = lift (Int x)
@@ -40,7 +43,7 @@ instance HFunctor (Let c) where
 let' :: (Let c << h) => Hefty h (c Int) -> (c Int -> Hefty h (c Int)) -> Hefty h (c Int)
 let' m f = Op $ injH $ Let m f Return
 
-data Label
+data Label = L String
 
 data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
 
@@ -50,9 +53,13 @@ data X86 c a where
   Imm :: Int -> X86 c (c Int)
   Addq :: c Int -> c Int -> X86 c ()
   Subq :: c Int -> c Int -> X86 c ()
-  Mulq :: c Int -> c Int -> X86 c ()
+  Negq :: c Int -> X86 c ()
   Movq :: c Int -> c Int -> X86 c ()
   Callq :: c Label -> X86 c ()
+
+  Pushq :: c Int -> X86 c ()
+  Popq :: c Int -> X86 c ()
+  Retq :: X86 c a
 
 reg :: In eff (X86 c) f => Reg -> eff f (c Int)
 reg r = lift (Reg r)
@@ -63,14 +70,53 @@ deref r n = lift (Deref r n)
 imm :: In eff (X86 c) f => Int -> eff f (c Int)
 imm n = lift (Imm n)
 
-addq, subq, mulq, movq :: In eff (X86 c) f => c Int -> c Int -> eff f ()
+addq, subq, movq :: In eff (X86 c) f => c Int -> c Int -> eff f ()
 addq x y = lift (Addq x y)
 subq x y = lift (Subq x y)
-mulq x y = lift (Mulq x y)
 movq x y = lift (Movq x y)
+
+negq :: In eff (X86 c) f => c Int -> eff f ()
+negq x = lift (Negq x)
 
 callq :: In eff (X86 c) f => c Label -> eff f ()
 callq l = lift (Callq l)
+
+-- label :: In eff (X86 c) f => String -> eff f (c Label)
+-- label l = lift (Label l)
+
+-- globl, block :: In eff (X86 c) f => c Label -> eff f ()
+-- globl l = lift (Globl l)
+-- block l = lift (Block l)
+
+pushq, popq :: In eff (X86 c) f => c Int -> eff f ()
+pushq x = lift (Pushq x)
+popq x = lift (Popq x)
+
+-- jmp :: In eff (X86 c) f => c Label -> eff f ()
+-- jmp l = lift (Jmp l)
+
+retq :: forall c eff f a. In eff (X86 c) f => eff f a
+retq = lift (Retq @c)
+
+data Block m k
+  = Blocks [(Label, m ())] k
+  | Jmp Label
+  | Globl Label k
+  deriving Functor
+
+instance HFunctor Block where
+  hmap f (Blocks xs k) = Blocks (fmap (\(x,y) -> (x, f y)) xs) k
+  hmap _ (Jmp lbl) = Jmp lbl
+  hmap _ (Globl lbl k) = Globl lbl k
+
+blocks :: Block << h => [(Label, Hefty h ())] -> Hefty h ()
+blocks blks = Op $ injH $ Blocks blks (Return ())
+
+jmp :: Block << h => Label -> Hefty h a
+jmp lbl = Op $ injH $ Jmp lbl
+
+globl :: Block << h => Label -> Hefty h ()
+globl lbl = Op $ injH $ Globl lbl (Return ())
 
 data X86Var c a where
   X86Var :: X86Var c (c Int)
@@ -83,7 +129,7 @@ arithAlg = Alg \(Lift l k) -> case l of
   Int n -> imm n >>= k
   Add x y -> x86var >>= \z -> movq y z >> addq x z >> k z
   Sub x y -> x86var >>= \z -> movq y z >> subq x z >> k z
-  Mul x y -> x86var >>= \z -> movq y z >> mulq x z >> k z
+  Neg x -> x86var >>= \z -> movq x z >> negq z >> k z
 
 readAlg :: (HFunctor h, Lift (X86 c) << h, Lift (X86Var c) << h) => c Label -> Alg (Lift (Read c)) (Hefty h)
 readAlg read_int = Alg \(Lift l k) -> case l of
@@ -99,6 +145,7 @@ pass1 read_int = foldH pure (arithAlg ++~ readAlg read_int ++~ letAlg)
 
 newtype Const x a = Const { unConst :: x }
 
+
 countVars :: Alg (Lift (X86Var (Const ()))) (Const Int)
 countVars = Alg \(Lift l k) -> case l of
   X86Var -> Const (1 + unConst (k (Const ())))
@@ -113,10 +160,66 @@ assignHomes = Alg \(Lift l k) -> case l of
   X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (k z) (n + 1)
 
 liftReaderTAlg :: (HFunctor h, Functor (h (ReaderT r m))) => Alg h m -> Alg h (ReaderT r m)
-liftReaderTAlg (Alg x) = Alg \y -> ReaderT \r -> x (hmap (\y -> runReaderT y r) $ fmap (\y -> runReaderT y r) $ y)
+liftReaderTAlg (Alg x) = Alg \y -> ReaderT \r -> x (hmap (\z -> runReaderT z r) $ fmap (\z -> runReaderT z r) $ y)
 
 pass2 :: forall c h a. (HFunctor h, Lift (X86 c) << h) => Hefty (Lift (X86Var c) ++ Lift (X86 c)) a -> Hefty h a
 pass2 x = runReaderT (foldH (ReaderT . const . pure) (assignHomes ++~ liftReaderTAlg nopAlg) x) 1
+
+data Patch c a where
+  Mem :: c Int -> Patch c Int
+  Loc :: c a -> Patch c a
+
+unpatch :: Patch c a -> c a
+unpatch (Mem x) = x
+unpatch (Loc x) = x
+
+patchOp :: In eff (X86 c) f => (c Int -> c Int -> eff f a) -> c Int -> c Int -> (() -> eff f b) -> eff f b
+patchOp op x y k = reg Rax >>= \z -> movq x z >> op z y >> k ()
+
+patchX86 :: forall h c. (HFunctor h, Lift (X86 c) << h) => Alg (Lift (X86 (Patch c))) (Hefty h)
+patchX86 = Alg \(Lift op k) -> case op of
+  Addq (Mem x) (Mem y) -> patchOp addq x y k
+  Subq (Mem x) (Mem y) -> patchOp subq x y k
+  Movq (Mem x) (Mem y) -> patchOp movq x y k
+
+  Reg r -> reg @_ @c r >>= k . Loc
+  Deref r i -> deref r i >>= k . Mem
+  Imm n -> imm n >>= k . Loc
+
+  Addq x y -> addq (unpatch x) (unpatch y) >>= k
+  Subq x y -> subq (unpatch x) (unpatch y) >>= k
+  Negq x -> negq (unpatch x) >>= k
+  Movq x y -> movq (unpatch x) (unpatch y) >>= k
+  Callq l -> callq (unpatch l) >>= k
+  Pushq x -> pushq (unpatch x) >>= k
+  Popq x -> popq (unpatch x) >>= k
+  Retq -> retq @c
+
+pass25 :: forall c a. Hefty (Lift (X86 (Patch c))) (Patch c a) -> Hefty (Lift (X86 c)) (c a)
+pass25 = fmap unpatch . foldH pure patchX86
+
+pass3 :: forall c. Int -> Hefty (Lift (X86 c)) (c Int) -> Hefty (Block ++ Lift (X86 c)) ()
+pass3 stackSize x = do
+  rbp <- reg @_ @c Rbp
+  rsp <- reg Rsp
+  rax <- reg Rax
+  n <- imm stackSize
+  globl (L "_main")
+  blocks
+    [ (L "_start", do
+      z <- foldH pure nopAlg x
+      movq z rax
+      jmp (L "_conclusion"))
+    , (L "_main", do
+      pushq rbp
+      movq rsp rbp
+      subq n rsp
+      jmp (L "_start"))
+    , (L "_conclusion", do
+      addq n rsp
+      popq rbp
+      retq @c)
+    ]
 
 prettyReg :: Reg -> String
 prettyReg Rax = "%rax"
@@ -130,24 +233,35 @@ prettyReg Rsi = "%rsi"
 
 prettyX86 :: Alg (Lift (X86 (Const String))) (Const String)
 prettyX86 = Alg \(Lift op k) -> case op of
-  Reg r -> k (Const (prettyReg r))
-  Deref r i -> k (Const (show i ++ "(" ++ prettyReg r ++ ")"))
-  Imm n -> k (Const ("$" ++ show n))
+  Reg r -> k $ Const $ prettyReg r
+  Deref r i -> k $ Const $ show i ++ "(" ++ prettyReg r ++ ")"
+  Imm n -> k $ Const $ "$" ++ show n
   Addq x y -> Const $ "addq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
   Subq x y -> Const $ "subq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
-  Mulq x y -> Const $ "mulq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
+  Negq x -> Const $ "negq " ++ unConst x ++ "\n" ++ unConst (k ())
   Movq x y -> Const $ "movq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
   Callq lab -> Const $ "callq " ++ unConst lab ++ "\n" ++ unConst (k ())
 
-pass3 :: Hefty (Lift (X86 (Const String))) (Const String a)-> String
-pass3 =  unConst . foldH (const (Const "")) prettyX86
+  Pushq x -> Const $ "pushq " ++ unConst x ++ "\n" ++ unConst (k ())
+  Popq x -> Const $ "popq " ++ unConst x ++ "\n" ++ unConst (k ())
+  Retq -> Const "retq\n"
+
+prettyBlock :: Alg Block (Const String)
+prettyBlock = Alg \case
+  Blocks blks k -> Const $ foldr (\(L lbl, x) xs -> lbl ++ ":\n" ++ unConst x ++ xs) "" blks ++ unConst k
+  Jmp (L lbl) -> Const $ "jmp " ++ lbl ++ "\n"
+  Globl (L lbl) k -> Const $ ".globl " ++ lbl ++ "\n" ++ unConst k
+
+pass4 :: Hefty (Block ++ Lift (X86 (Const String))) () -> String
+pass4 =  unConst . foldH (\_ -> Const "") (prettyBlock ++~ prettyX86)
+
+-- TODO: Use countVars for pass3
 
 main :: IO ()
-main = putStrLn $ (pass3 . pass2 @(Const String) . pass1 (Const "_read_int")) do
-  x <- int 1
+main = putStrLn $ (pass4 . pass3 48 . pass25 . pass2 @(Patch (Const String)) . pass1 (Loc (Const "_read_int"))) do
   let' read \y -> do
     z <- read
-    w <- mul x z
+    w <- neg z
     v <- add y w
     sub y v
 

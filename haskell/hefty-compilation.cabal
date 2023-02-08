@@ -16,3 +16,4 @@ executable hefty-compiler
     build-depends:    base ^>=4.17.0.0, hefty
     hs-source-dirs:   app
     default-language: GHC2021
+    ghc-options: -Wall
