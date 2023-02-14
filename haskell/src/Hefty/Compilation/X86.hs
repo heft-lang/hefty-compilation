@@ -10,11 +10,12 @@ data X86 c m a where
   Reg :: Reg -> X86 c m (c Int)
   Deref :: Reg -> Int -> X86 c m (c Int)
   Imm :: Int -> X86 c m (c Int)
+
   Addq :: c Int -> c Int -> X86 c m ()
   Subq :: c Int -> c Int -> X86 c m ()
   Negq :: c Int -> X86 c m ()
   Movq :: c Int -> c Int -> X86 c m ()
-  Callq :: c Label -> X86 c m ()
+  Callq :: Label -> X86 c m ()
 
   Pushq :: c Int -> X86 c m ()
   Popq :: c Int -> X86 c m ()
@@ -50,8 +51,8 @@ movq x y = send (Movq x y)
 negq :: X86 c << h => c Int -> Hefty h ()
 negq x = send (Negq x)
 
-callq :: X86 c << h => c Label -> Hefty h ()
-callq l = send (Callq l)
+callq :: forall c h. X86 c << h => Label -> Hefty h ()
+callq l = send (Callq @c l)
 
 pushq, popq :: X86 c << h => c Int -> Hefty h ()
 pushq x = send (Pushq x)

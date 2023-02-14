@@ -6,51 +6,71 @@
 {-# HLINT ignore "Use const" #-}
 {-# HLINT ignore "Use >=>" #-}
 
+{-# LANGUAGE NoMonomorphismRestriction #-}
+
 import Hefty hiding (L)
-import Hefty.Algebraic
 import Prelude hiding (Read, read)
 
 import Hefty.Compilation
+import Data.Functor.Const
 
 arithAlg :: (HFunctor h, X86 c << h, X86Var c << h) => Alg (Arith c) (Hefty h)
 arithAlg = Alg \op k -> case op of
   Int n -> imm n >>= k
-  Add x y -> x86var >>= \z -> movq y z >> addq x z >> k z
-  Sub x y -> x86var >>= \z -> movq y z >> subq x z >> k z
+  Add x y -> x86var >>= \z -> movq x z >> addq y z >> k z
+  Sub x y -> x86var >>= \z -> movq x z >> subq y z >> k z
   Neg x -> x86var >>= \z -> movq x z >> negq z >> k z
 
-readAlg :: (HFunctor h, X86 c << h, X86Var c << h) => c Label -> Alg (Read c) (Hefty h)
+readAlg :: forall c h. (HFunctor h, X86 c << h, X86Var c << h) => Label -> Alg (Read c) (Hefty h)
 readAlg read_int = Alg \op k -> case op of
-  Read -> x86var >>= \z -> callq read_int >> reg Rax >>= \rax -> movq rax z >> k z
+  Read -> x86var >>= \z -> callq @c read_int >> reg Rax >>= \rax -> movq rax z >> k z
 
 letAlg :: HFunctor h => Alg (Let c) (Hefty h)
 letAlg = Alg \op k -> case op of
   Let m f -> m >>= \x -> f x >>= k
 
-selectInstructions :: forall c h a. (HFunctor h, X86 c << h, X86Var c << h) =>
-  c Label -> Hefty (Arith c ++ (Read c ++ Let c)) a -> Hefty h a
+selectInstructions :: Label -> Hefty (Arith c ++ Read c ++ Let c) a -> Hefty (X86Var c ++ X86 c) a
 selectInstructions read_int = foldH pure (arithAlg ++~ readAlg read_int ++~ letAlg)
 
-newtype Const x a = Const { unConst :: x }
+countVarsAlg :: Alg (X86Var (Const ())) (Const Int)
+countVarsAlg = Alg \op k -> case op of
+  X86Var -> Const (1 + getConst (k (Const ())))
 
-countVars :: Alg (X86Var (Const ())) (Const Int)
-countVars = Alg \op k -> case op of
-  X86Var -> Const (1 + unConst (k (Const ())))
+-- TODO: Generalize this
+countVarsX86Alg :: Alg (X86 (Const ())) (Const Int)
+countVarsX86Alg = Alg \op k -> case op of
+  Reg{} -> k (Const ())
+  Deref{} -> k (Const ())
+  Imm{} -> k (Const ())
+  Addq{} -> k ()
+  Subq{} -> k ()
+  Negq{} -> k ()
+  Movq{} -> k ()
+  Callq{} -> k ()
+  Pushq{} -> k ()
+  Popq{} -> k ()
+  Retq -> Const 0
+
+countVars :: Hefty (X86Var (Const ()) ++ X86 (Const ())) a -> Int
+countVars = getConst . foldH (\_ -> Const 0) (countVarsAlg ++~ countVarsX86Alg)
 
 -- Ideally we would have a version of countvars that ignores all other effects, but writing that generically
 -- requires us to modify the Hefty type or introduce a type class to get access to the continuation.
 
-newtype ReaderT r m a = ReaderT { runReaderT :: r -> m a }
+newtype ReaderT r m a = ReaderT (r -> m a)
+
+runReaderT :: r -> ReaderT r m a -> m a
+runReaderT r (ReaderT f) = f r
 
 assignHomesAlg :: (HFunctor h, X86 c << h) => Alg (X86Var c) (ReaderT Int (Hefty h))
 assignHomesAlg = Alg \op k -> case op of
-  X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (k z) (n + 1)
+  X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (n + 1) (k z)
 
 liftReaderTAlg :: HFunctor h => Alg h m -> Alg h (ReaderT r m)
-liftReaderTAlg (Alg a) = Alg \op k -> ReaderT \r -> a (hmap (\z -> runReaderT z r) op) ((\z -> runReaderT z r) . k)
+liftReaderTAlg (Alg a) = Alg \op k -> ReaderT \r -> a (hmap (runReaderT r) op) (runReaderT r . k)
 
-assignHomes :: forall c h a. (HFunctor h, X86 c << h) => Hefty (X86Var c ++ X86 c) a -> Hefty h a
-assignHomes x = runReaderT (foldH (ReaderT . const . pure) (assignHomesAlg ++~ liftReaderTAlg nopAlg) x) 1
+assignHomes :: Hefty (X86Var c ++ X86 c) a -> Hefty (X86 c) a
+assignHomes x = runReaderT 1 (foldH (ReaderT . const . pure) (assignHomesAlg ++~ liftReaderTAlg injAlg) x)
 
 data Patch c a where
   Mem :: c Int -> Patch c Int
@@ -63,7 +83,7 @@ unpatch (Loc x) = x
 patchOp :: (HFunctor h, X86 c << h) => (c Int -> c Int -> Hefty h a) -> c Int -> c Int -> (() -> Hefty h b) -> Hefty h b
 patchOp op x y k = reg Rax >>= \z -> movq x z >> op z y >> k ()
 
-patchX86 :: forall h c. (HFunctor h, X86 c << h) => Alg (X86 (Patch c)) (Hefty h)
+patchX86 :: forall c h. (HFunctor h, X86 c << h) => Alg (X86 (Patch c)) (Hefty h)
 patchX86 = Alg \op k -> case op of
   Addq (Mem x) (Mem y) -> patchOp addq x y k
   Subq (Mem x) (Mem y) -> patchOp subq x y k
@@ -77,33 +97,33 @@ patchX86 = Alg \op k -> case op of
   Subq x y -> subq (unpatch x) (unpatch y) >>= k
   Negq x -> negq (unpatch x) >>= k
   Movq x y -> movq (unpatch x) (unpatch y) >>= k
-  Callq l -> callq (unpatch l) >>= k
+  Callq l -> callq @c l >>= k
   Pushq x -> pushq (unpatch x) >>= k
   Popq x -> popq (unpatch x) >>= k
   Retq -> retq @c
 
-patchInstructions :: forall c a. Hefty (X86 (Patch c)) (Patch c a) -> Hefty (X86 c) (c a)
+patchInstructions :: Hefty (X86 (Patch c)) (Patch c a) -> Hefty (X86 c) (c a)
 patchInstructions = fmap unpatch . foldH pure patchX86
 
 preludeAndConclusion :: forall c. Int -> Hefty (X86 c) (c Int) -> Hefty (Block ++ X86 c) ()
-preludeAndConclusion stackSize x = do
+preludeAndConclusion varCount x = do
   rbp <- reg @c Rbp
   rsp <- reg Rsp
   rax <- reg Rax
-  n <- imm stackSize
+  stackSize <- imm (8 * (varCount + 1))
   globl (L "_main")
   blocks
     [ (L "_start", do
-      z <- foldH pure nopAlg x
+      z <- foldH pure injAlg x
       movq z rax
       jmp (L "_conclusion"))
     , (L "_main", do
       pushq rbp
       movq rsp rbp
-      subq n rsp
+      subq stackSize rsp
       jmp (L "_start"))
     , (L "_conclusion", do
-      addq n rsp
+      addq stackSize rsp
       popq rbp
       retq @c)
     ]
@@ -123,34 +143,41 @@ prettyX86 = Alg \op k -> case op of
   Reg r -> k $ Const $ prettyReg r
   Deref r i -> k $ Const $ show i ++ "(" ++ prettyReg r ++ ")"
   Imm n -> k $ Const $ "$" ++ show n
-  Addq x y -> Const $ "addq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
-  Subq x y -> Const $ "subq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
-  Negq x -> Const $ "negq " ++ unConst x ++ "\n" ++ unConst (k ())
-  Movq x y -> Const $ "movq " ++ unConst x ++ ", " ++ unConst y ++ "\n" ++ unConst (k ())
-  Callq lab -> Const $ "callq " ++ unConst lab ++ "\n" ++ unConst (k ())
+  Addq x y -> Const $ "addq " ++ getConst x ++ ", " ++ getConst y ++ "\n" ++ getConst (k ())
+  Subq x y -> Const $ "subq " ++ getConst x ++ ", " ++ getConst y ++ "\n" ++ getConst (k ())
+  Negq x -> Const $ "negq " ++ getConst x ++ "\n" ++ getConst (k ())
+  Movq x y -> Const $ "movq " ++ getConst x ++ ", " ++ getConst y ++ "\n" ++ getConst (k ())
+  Callq lab -> Const $ "callq " ++ getLabel lab ++ "\n" ++ getConst (k ())
 
-  Pushq x -> Const $ "pushq " ++ unConst x ++ "\n" ++ unConst (k ())
-  Popq x -> Const $ "popq " ++ unConst x ++ "\n" ++ unConst (k ())
+  Pushq x -> Const $ "pushq " ++ getConst x ++ "\n" ++ getConst (k ())
+  Popq x -> Const $ "popq " ++ getConst x ++ "\n" ++ getConst (k ())
   Retq -> Const "retq\n"
 
 prettyBlock :: Alg Block (Const String)
 prettyBlock = Alg \op k -> case op of
-  Blocks blks -> Const $ foldr (\(L lbl, x) xs -> lbl ++ ":\n" ++ unConst x ++ xs) "" blks ++ unConst (k ())
+  Blocks blks -> Const $ foldr (\(L lbl, x) xs -> lbl ++ ":\n" ++ getConst x ++ xs) "" blks ++ getConst (k ())
   Jmp (L lbl) -> Const $ "jmp " ++ lbl ++ "\n"
-  Globl (L lbl) -> Const $ ".globl " ++ lbl ++ "\n" ++ unConst (k ())
+  Globl (L lbl) -> Const $ ".globl " ++ lbl ++ "\n" ++ getConst (k ())
 
 prettyPrint :: Hefty (Block ++ X86 (Const String)) () -> String
-prettyPrint =  unConst . foldH (\_ -> Const "") (prettyBlock ++~ prettyX86)
-
--- TODO: Use countVars for preludeAndConclusion
+prettyPrint =  getConst . foldH (\_ -> Const "") (prettyBlock ++~ prettyX86)
 
 main :: IO ()
-main = putStrLn $ (prettyPrint . preludeAndConclusion 48 . patchInstructions . assignHomes @(Patch (Const String)) . selectInstructions (Loc (Const "_read_int"))) do
-  let' read \y -> do
-    z <- read
-    w <- neg z
-    v <- add y w
-    sub y v
+main =
+  let
+    program :: Hefty (Arith c ++ Read c ++ Let c) (c Int)
+    program = do
+      x <- read
+      y <- read
+      sub x y
+    selected = selectInstructions (L "_read_int") program
+    -- I believe this double use of 'selected' will cause the whole pipeline up to that point to be executed twice.
+    count = countVars selected
+    assigned = assignHomes selected
+    patched = patchInstructions assigned
+    full = preludeAndConclusion count patched
+    pretty = prettyPrint full
+  in putStrLn pretty
 
 -- TODO:
 -- [x] Weaken let2set_Alg
