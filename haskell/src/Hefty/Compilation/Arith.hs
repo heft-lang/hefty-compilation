@@ -2,12 +2,13 @@
 module Hefty.Compilation.Arith where
 
 import Hefty
+import Hefty.Compilation.Common
 
 data Arith c m a where
-  Add :: c Int -> c Int -> Arith c m (c Int)
-  Sub :: c Int -> c Int -> Arith c m (c Int)
-  Neg :: c Int -> Arith c m (c Int)
-  Int :: Int -> Arith c m (c Int)
+  Add :: c Val -> c Val -> Arith c m (c Val)
+  Sub :: c Val -> c Val -> Arith c m (c Val)
+  Neg :: c Val -> Arith c m (c Val)
+  Int :: Int -> Arith c m (c Val)
 
 instance HFunctor (Arith c) where
   hmap _ (Add x y) = Add x y
@@ -15,12 +16,12 @@ instance HFunctor (Arith c) where
   hmap _ (Neg x) = Neg x
   hmap _ (Int n) = Int n
 
-add, sub :: Arith c << h => c Int -> c Int -> Hefty h (c Int)
+add, sub :: Arith c << h => c Val -> c Val -> Hefty h (c Val)
 add x y = send (Add x y)
 sub x y = send (Sub x y)
 
-neg :: Arith c << h => c Int -> Hefty h (c Int)
+neg :: Arith c << h => c Val -> Hefty h (c Val)
 neg x = send (Neg x)
 
-int :: Arith c << h => Int -> Hefty h (c Int)
+int :: Arith c << h => Int -> Hefty h (c Val)
 int x = send (Int x)

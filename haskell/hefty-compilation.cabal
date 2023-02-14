@@ -23,10 +23,10 @@ library
                      Hefty.Compilation.Arith,
                      Hefty.Compilation.Block,
                      Hefty.Compilation.Common,
+                     Hefty.Compilation.Cond,
                      Hefty.Compilation.Let,
                      Hefty.Compilation.Read,
-                     Hefty.Compilation.X86,
-                     Hefty.Compilation.X86Var
+                     Hefty.Compilation.X86
     build-depends: base, hefty
     hs-source-dirs: src
     default-language: GHC2021
