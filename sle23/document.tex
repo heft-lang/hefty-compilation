@@ -1,0 +1,62 @@
+\documentclass[sigplan,anonymous,review]{acmart}
+
+%include polycode.fmt
+
+% \bibliographystyle{plainurl}% the mandatory bibstyle
+
+\title{Modular Compilation using Effects}
+
+\author{Jaro S. Reinders} % {Delft University of Technology, Netherlands}{j.s.reinders@tudelft.nl}{https://orcid.org/0000-0002-6837-3757}{} % (Optional) author-specific funding acknowledgements}
+
+\begin{document}
+
+\begin{abstract}
+
+\end{abstract}
+
+\maketitle
+
+\section{Introduction (1 page)} \label{sec:intro}
+
+Modern compilers for mature programming languages commonly consist of hundreds of thousands to tens of millions lines of code.
+At the same time, programming languages are still very actively developed.
+In the last 12 years many new programming languages have appeared, such as Kotlin, Rust, and Swift.
+Rewriting all those lines of code for each new language is very costly.
+It is not a coincidence that all three languages are built on top of mature back ends such as the JVM and LLVM.
+
+However, these mature back ends all employ a ``one size fits all'' approach.
+That means that new languages still need to write their own language specific optimization and adapter code for these mature back ends.
+
+
+Concretely, our contributions are:
+\begin{itemize}
+  \item We build a compiler for a small language in Section~\ref{sec:simple-lang}.
+  \item We show how to extend our compiler with conditionals and loops in Section~\ref{sec:cond-loops}.
+  \item We evaluate our approach in Section~\ref{sec:evaluation}
+\end{itemize}
+
+\section{Effects and Handlers (1 page)} \label{sec:effects-handlers}
+
+In this section we show what effects and handlers are and how they can be used in the context of compilers.
+
+\section{Compiling Simple Language to X86 (3 pages)} \label{sec:simple-lang}
+
+In this section we introduce a simple language and show how it can be compiled to X86 with variables.
+
+\section{Register Allocation (2 pages)} \label{sec:analysis}
+
+In this section we show how to run an analysis on our language.
+
+\section{Adding Conditionals and Loops (2 pages)} \label{sec:cond-loops}
+
+In this section we show that we can extend our language with new concepts without modifying code we have already written.
+
+\section{Evaluation (2 pages)} \label{sec:evaluation}
+
+In this section we evaluate the correctness of our compilers.
+
+\section{Conclusion (1 page)} \label{sec:conclusion}
+
+
+
+\end{document}
