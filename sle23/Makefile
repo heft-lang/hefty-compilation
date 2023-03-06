@@ -8,8 +8,6 @@ build/output.tex: document.tex
 	sed -i '' 's/\\usepackage{amssymb}//' build/output.tex
 
 build/output.pdf: build/output.tex
-	pdflatex -output-directory=build build/output.tex
-	pdflatex -output-directory=build build/output.tex
-
+	latexmk -pdf -pdflatex="pdflatex -interaction=nonstopmode" -use-make build/output.tex -jobname=build/output
 clean:
 	rm -r build
