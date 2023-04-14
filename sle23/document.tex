@@ -22,41 +22,83 @@ Modern compilers for mature programming languages commonly consist of hundreds o
 At the same time, programming languages are still very actively developed.
 In the last 12 years many new programming languages have appeared, such as Kotlin, Rust, and Swift.
 Rewriting all those lines of code for each new language is very costly.
-It is not a coincidence that all three languages are built on top of mature back ends such as the JVM and LLVM.
+It is not a coincidence that all three languages are built on top of mature compiler platforms such as the JVM and LLVM.
 
-However, these mature back ends all employ a ``one size fits all'' approach.
-That means that new languages still need to write their own language specific optimization and adapter code for these mature back ends.
+However, the interface of these platforms, the intermediate representations (IR), are all monolithic and therefore limited to a single level of abstraction.
+That means that languages often still need to use a separate IR at a different level of abstraction for their own language specific optimizations and transformations.
 
+The question we answer in this paper is: How can we design a compiler platform 
+
+\begin{itemize}
+  \item What are the main ideas behind this paper?
+  \item Why is it different from previous work?
+\end{itemize}
 
 Concretely, our contributions are:
 \begin{itemize}
-  \item We build a compiler for a small language in Section~\ref{sec:simple-lang}.
-  \item We show how to extend our compiler with conditionals and loops in Section~\ref{sec:cond-loops}.
+  \item We show how to build a modular compiler from a small language to a subset of X86 in Section~\ref{sec:simple-lang}.
+  \item We demonstrate analyses and transformation  over our modular IR in Section~\ref{sec:analysis}.
+  \item We demonstrate the modularity of our approach by extending our compiler with conditionals and loops in Section~\ref{sec:cond-loops}.
   \item We evaluate our approach in Section~\ref{sec:evaluation}
 \end{itemize}
 
-\section{Effects and Handlers (1 page)} \label{sec:effects-handlers}
+\section{Effects and Handlers (3 page)} \label{sec:effects-handlers}
 
 In this section we show what effects and handlers are and how they can be used in the context of compilers.
 
-\section{Compiling Simple Language to X86 (3 pages)} \label{sec:simple-lang}
+\begin{itemize}
+  \item Keep high level
+  \item Explain what the signatures are
+  \item Show example program with high level effect like Arith and I/O and an equivalent program in X86 with variables (show types)
+  \item High level overview of the whole approach
+  \item Show effectful definitional interpreters
+  \item Foreshadow reuse and other nice properties by using interpreters over multiple passes (maybe even full pipeline)
+  \item (higher order functions would be nice)
+\end{itemize}
+
+\section{Syntactic Representation of Free Monads (1 page)}
+  
+\begin{itemize}
+\item Show Free Monad refer to DTC
+\item Show why the higher order representation is problematic
+\end{itemize}
+
+\section{Compiling a Simple Language to X86 (1 pages)} \label{sec:simple-lang}
 
 In this section we introduce a simple language and show how it can be compiled to X86 with variables.
 
 \section{Register Allocation (2 pages)} \label{sec:analysis}
 
-In this section we show how to run an analysis on our language.
+In this section we show how we can remove the variables from our X86 representation.
+This also serves as a demonstration of running an analysis over our modular IR.
 
 \section{Adding Conditionals and Loops (2 pages)} \label{sec:cond-loops}
 
 In this section we show that we can extend our language with new concepts without modifying code we have already written.
 
-\section{Evaluation (2 pages)} \label{sec:evaluation}
+\section{Evaluation (1 pages)} \label{sec:evaluation}
 
 In this section we evaluate the correctness of our compilers.
 
-\section{Conclusion (1 page)} \label{sec:conclusion}
+\begin{itemize}
+  \item Use Siek's examples
+\end{itemize}
+
+\section{Related Work (1/2 page)} \label{sec:related}
+
+\begin{itemize}
+  \item MLIR
+  \item nanopass compilation
+  \item Hefty Algebras
+\end{itemize}
+
+\section{Conclusion and Future Work(1/2 page)} \label{sec:conclusion}
 
 
+
+Future work:
+\begin{itemize}
+  \item Formal verification
+\end{itemize}
 
 \end{document}
