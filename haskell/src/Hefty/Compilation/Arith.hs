@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 module Hefty.Compilation.Arith where
 
 import Hefty
@@ -10,18 +11,25 @@ data Arith c m a where
   Neg :: c Val -> Arith c m (c Val)
   Int :: Int -> Arith c m (c Val)
 
-instance HFunctor (Arith c) where
-  hmap _ (Add x y) = Add x y
-  hmap _ (Sub x y) = Sub x y
-  hmap _ (Neg x) = Neg x
-  hmap _ (Int n) = Int n
+instance HTraversable (Arith c) where
+  htraverse _ (Add x y) = pure $ Add x y
+  htraverse _ (Sub x y) = pure $ Sub x y
+  htraverse _ (Neg x) = pure $ Neg x
+  htraverse _ (Int n) = pure $ Int n
 
-add, sub :: Arith c << h => c Val -> c Val -> Hefty h (c Val)
-add x y = send (Add x y)
-sub x y = send (Sub x y)
 
-neg :: Arith c << h => c Val -> Hefty h (c Val)
-neg x = send (Neg x)
+instance (forall x. Alpha (c x)) => Alpha (Arith c m a) where
+  rename _ _ (Int k) = Int k
+  rename x y (Add z w) = Add (rename x y z) (rename x y w)
+  rename x y (Sub z w) = Sub (rename x y z) (rename x y w)
+  rename x y (Neg z) = Neg (rename x y z)
 
-int :: Arith c << h => Int -> Hefty h (c Val)
-int x = send (Int x)
+add, sub :: (Fresh < t, Arith Name << h) => Name Val -> Name Val -> TL t h (Name Val)
+add x y = sendR (Add x y)
+sub x y = sendR (Sub x y)
+
+neg :: (Fresh < t, Arith Name << h) => Name Val -> TL t h (Name Val)
+neg x = sendR (Neg x)
+
+int :: (Fresh < t, Arith Name << h) => Int -> TL t h (Name Val)
+int x = sendR (Int x)

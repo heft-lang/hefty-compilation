@@ -3,110 +3,112 @@ module Hefty.Compilation.X86 where
 
 import Hefty
 import Hefty.Compilation.Common
+import Data.Void
 
 data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
 
-data X86 c m a where
-  Reg :: Reg -> X86 c m (c Val)
-  Deref :: Reg -> Int -> X86 c m (c Val)
-  Imm :: Int -> X86 c m (c Val)
+data X86 m a where
+  Reg :: Reg -> X86 m (Name Val)
+  Deref :: Reg -> Int -> X86 m (Name Val)
+  Imm :: Int -> X86 m (Name Val)
 
-  Addq :: c Val -> c Val -> X86 c m ()
-  Subq :: c Val -> c Val -> X86 c m ()
-  Negq :: c Val -> X86 c m ()
-  Movq :: c Val -> c Val -> X86 c m ()
-  Callq :: Label -> X86 c m ()
-  Globl :: Label -> X86 c m ()
+  Addq :: Name Val -> Name Val -> X86 m (Name ())
+  Subq :: Name Val -> Name Val -> X86 m (Name ())
+  Negq :: Name Val -> X86 m (Name ())
+  Movq :: Name Val -> Name Val -> X86 m (Name ())
 
-  Pushq :: c Val -> X86 c m ()
-  Popq :: c Val -> X86 c m ()
-  Retq :: X86 c m a
+  Callq :: Label -> X86 m (Name ())
+  Globl :: Label -> X86 m (Name ())
 
-instance HFunctor (X86 c) where
-  hmap _ (Reg r) = Reg r
-  hmap _ (Deref r i) = Deref r i
-  hmap _ (Imm n) = Imm n
-  hmap _ (Addq x y) = Addq x y
-  hmap _ (Subq x y) = Subq x y
-  hmap _ (Negq x) = Negq x
-  hmap _ (Movq x y) = Movq x y
-  hmap _ (Callq l) = Callq l
-  hmap _ (Globl l) = Globl l
-  hmap _ (Pushq x) = Pushq x
-  hmap _ (Popq x) = Popq x
-  hmap _ Retq = Retq
+  Pushq :: Name Val -> X86 m (Name ())
+  Popq :: Name Val -> X86 m (Name ())
+  Retq :: X86 m a
 
-reg :: X86 c << h => Reg -> Hefty h (c Val)
-reg r = send (Reg r)
+instance HTraversable X86 where
+  htraverse _ (Reg r) = pure $ Reg r
+  htraverse _ (Deref r i) = pure $ Deref r i
+  htraverse _ (Imm n) = pure $ Imm n
+  htraverse _ (Addq x y) = pure $ Addq x y
+  htraverse _ (Subq x y) = pure $ Subq x y
+  htraverse _ (Negq x) = pure $ Negq x
+  htraverse _ (Movq x y) = pure $ Movq x y
+  htraverse _ (Callq l) = pure $ Callq l
+  htraverse _ (Globl l) = pure $ Globl l
+  htraverse _ (Pushq x) = pure $ Pushq x
+  htraverse _ (Popq x) = pure $ Popq x
+  htraverse _ Retq = pure Retq
 
-deref :: X86 c << h => Reg -> Int -> Hefty h (c Val)
-deref r n = send (Deref r n)
+reg :: (Fresh < t, X86 << h) => Reg -> TL t h (Name Val)
+reg r = sendR (Reg r)
 
-imm :: X86 c << h => Int -> Hefty h (c Val)
-imm n = send (Imm n)
+deref :: (Fresh < t, X86 << h) => Reg -> Int -> TL t h (Name Val)
+deref r n = sendR (Deref r n)
 
-addq, subq, movq :: X86 c << h => c Val -> c Val -> Hefty h ()
-addq x y = send (Addq x y)
-subq x y = send (Subq x y)
-movq x y = send (Movq x y)
+imm :: (Fresh < t, X86 << h) => Int -> TL t h (Name Val)
+imm n = sendR (Imm n)
 
-negq :: X86 c << h => c Val -> Hefty h ()
-negq x = send (Negq x)
+addq, subq, movq :: (Fresh < t, X86 << h) => Name Val -> Name Val -> TL t h (Name ())
+addq x y = sendR (Addq x y)
+subq x y = sendR (Subq x y)
+movq x y = sendR (Movq x y)
 
-callq :: forall c h. X86 c << h => Label -> Hefty h ()
-callq l = send (Callq @c l)
+negq :: (Fresh < t, X86 << h) => Name Val -> TL t h (Name ())
+negq x = sendR (Negq x)
 
-globl :: forall c h. X86 c << h => Label -> Hefty h ()
-globl lbl = send (Globl @c lbl)
+callq :: (Fresh < t, X86 << h) => Label -> TL t h (Name ())
+callq l = sendR (Callq l)
 
-pushq, popq :: X86 c << h => c Val -> Hefty h ()
-pushq x = send (Pushq x)
-popq x = send (Popq x)
+globl :: (Fresh < t, X86 << h) => Label -> TL t h (Name ())
+globl lbl = sendR (Globl lbl)
 
-retq :: forall c h a. X86 c << h => Hefty h a
-retq = send (Retq @c)
+pushq, popq :: (Fresh < t, X86 << h) => Name Val -> TL t h (Name ())
+pushq x = sendR (Pushq x)
+popq x = sendR (Popq x)
 
-data X86Var c m a where
-  X86Var :: X86Var c m (c Val)
+retq :: (Fresh < t, X86 << h) => TL t h (Name a)
+retq = sendR Retq
 
-instance HFunctor (X86Var c) where
-  hmap _ X86Var = X86Var
+data X86Var m a where
+  X86Var :: X86Var m (Name Val)
 
-x86var :: X86Var c << h => Hefty h (c Val)
-x86var = send X86Var
+instance HTraversable X86Var where
+  htraverse _ X86Var = pure X86Var
+
+x86var :: (Fresh < t, X86Var << h) => TL t h (Name Val)
+x86var = sendR X86Var
 
 data ByteReg = Ah | Al | Bh | Bl | Ch | Cl | Dh | Dl deriving (Eq, Show)
 
-data X86Cond c m a where
-  ByteReg :: ByteReg -> X86Cond c m (c Val)
-  Xorq :: c Val -> c Val -> X86Cond c m ()
-  Cmpq :: c Val -> c Val -> X86Cond c m ()
-  Setcc :: CC -> c Val -> X86Cond c m ()
-  Movzbq :: c Val -> c Val -> X86Cond c m () -- 8bit -> 64bit
-  Jcc :: CC -> Label -> X86Cond c m ()
+data X86Cond m a where
+  ByteReg :: ByteReg -> X86Cond m (Name Val)
+  Xorq :: Name Val -> Name Val -> X86Cond m (Name ())
+  Cmpq :: Name Val -> Name Val -> X86Cond m (Name ())
+  Setcc :: CC -> Name Val -> X86Cond m (Name ())
+  Movzbq :: Name Val -> Name Val -> X86Cond m (Name ()) -- 8bit -> 64bit
+  Jcc :: CC -> Label -> X86Cond m (Name ())
 
-instance HFunctor (X86Cond c) where
-  hmap _ (ByteReg r) = ByteReg r
-  hmap _ (Xorq x y) = Xorq x y
-  hmap _ (Cmpq x y) = Cmpq x y
-  hmap _ (Setcc cc x) = Setcc cc x
-  hmap _ (Movzbq x y) = Movzbq x y
-  hmap _ (Jcc cc l) = Jcc cc l
+instance HTraversable X86Cond where
+  htraverse _ (ByteReg r) = pure $ ByteReg r
+  htraverse _ (Xorq x y) = pure $ Xorq x y
+  htraverse _ (Cmpq x y) = pure $ Cmpq x y
+  htraverse _ (Setcc cc x) = pure $ Setcc cc x
+  htraverse _ (Movzbq x y) = pure $ Movzbq x y
+  htraverse _ (Jcc cc l) = pure $ Jcc cc l
 
-byteReg :: X86Cond c << h => ByteReg -> Hefty h (c Val)
-byteReg r = send (ByteReg r)
+byteReg :: (Fresh < t, X86Cond << h) => ByteReg -> TL t h (Name Val)
+byteReg r = sendR (ByteReg r)
 
-xorq :: X86Cond c << h => c Val -> c Val -> Hefty h ()
-xorq x y = send (Xorq x y)
+xorq :: (Fresh < t, X86Cond << h) => Name Val -> Name Val -> TL t h (Name ())
+xorq x y = sendR (Xorq x y)
 
-cmpq :: X86Cond c << h => c Val -> c Val -> Hefty h ()
-cmpq x y = send (Cmpq x y)
+cmpq :: (Fresh < t, X86Cond << h) => Name Val -> Name Val -> TL t h (Name ())
+cmpq x y = sendR (Cmpq x y)
 
-setcc :: X86Cond c << h => CC -> c Val -> Hefty h ()
-setcc cc x = send (Setcc cc x)
+setcc :: (Fresh < t, X86Cond << h) => CC -> Name Val -> TL t h (Name ())
+setcc cc x = sendR (Setcc cc x)
 
-movzbq :: X86Cond c << h => c Val -> c Val -> Hefty h ()
-movzbq x y = send (Movzbq x y)
+movzbq :: (Fresh < t, X86Cond << h) => Name Val -> Name Val -> TL t h (Name ())
+movzbq x y = sendR (Movzbq x y)
 
-jcc :: forall c h a. X86Cond c << h => CC -> Label -> Hefty h ()
-jcc cc l = send (Jcc @c cc l)
+jcc :: (Fresh < t, X86Cond << h) => CC -> Label -> TL t h (Name ())
+jcc cc l = sendR (Jcc cc l)

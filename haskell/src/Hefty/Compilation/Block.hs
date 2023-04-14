@@ -3,17 +3,18 @@ module Hefty.Compilation.Block where
 
 import Hefty.Compilation.Common
 import Hefty
+import Data.Void
 
 data Block m a where
-  Blocks :: m () -> [(Label, m ())] -> Block m () 
+  Blocks :: m (Name ()) -> [(Label, m (Name ()))] -> Block m (Name ()) 
   Jmp :: Label -> Block m a
 
-instance HFunctor Block where
-  hmap f (Blocks x xs) = Blocks (f x) (fmap (\(x,y) -> (x, f y)) xs)
-  hmap _ (Jmp lbl) = Jmp lbl
+instance HTraversable Block where
+  htraverse f (Blocks x xs) = Blocks <$> f x <*> traverse (\(x,y) -> (x,) <$> f y) xs
+  htraverse _ (Jmp lbl) = pure $ Jmp lbl
 
-blocks :: Block << h => Hefty h () -> [(Label, Hefty h ())] -> Hefty h ()
-blocks b blks = send (Blocks b blks)
+blocks :: (Fresh < t, Block << h) => TL t h (Name ()) -> [(Label, TL t h (Name ()))] -> TL t h (Name ())
+blocks b blks = flush b >>= \b' -> traverse (traverse flush) blks >>= \blks' -> sendR (Blocks b' blks')
 
-jmp :: Block << h => Label -> Hefty h a
-jmp lbl = send (Jmp lbl)
+jmp :: (Fresh < t, Block << h) => Label -> TL t h (Name a)
+jmp lbl = sendR (Jmp lbl)

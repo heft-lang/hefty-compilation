@@ -4,11 +4,11 @@ module Hefty.Compilation.Let where
 import Hefty
 import Hefty.Compilation.Common
 
-data Let c m a where
-  Let :: m (c Val) -> (c Val -> m (c Val)) -> Let c m (c Val)
+data Let m a where
+  Let :: m (Name Val) -> Name Val -> m (Name Val) -> Let m (Name Val)
 
-instance HFunctor (Let c) where
-  hmap f (Let m b) = Let (f m) (f . b)
+instance HTraversable Let where
+  htraverse f (Let m n b) = (`Let` n) <$> f m <*> f b
 
-let' :: (Let c << h) => Hefty h (c Val) -> (c Val -> Hefty h (c Val)) -> Hefty h (c Val)
-let' m f = Op (injH $ Let m f) Return
+let' :: (Fresh < t, Let << h) => TL t h (Name Val) -> (Name Val -> TL t h (Name Val)) -> TL t h (Name Val)
+let' m f = do I n <- sendC Fresh; m' <- flush m; f' <- flush (f n); sendR (Let m' n f')

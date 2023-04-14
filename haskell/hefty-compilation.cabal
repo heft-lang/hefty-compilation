@@ -13,13 +13,15 @@ common warnings
 executable hefty-compiler
     import:           warnings
     main-is:          Main.hs
-    build-depends:    base ^>=4.17.0.0, hefty-compilation, hefty
+    build-depends:    base, hefty-compilation, containers
     hs-source-dirs:   app
     default-language: GHC2021
     ghc-options: -Wall
 
 library
-    exposed-modules: Hefty.Compilation, 
+    exposed-modules: 
+                     Hefty,
+                     Hefty.Compilation, 
                      Hefty.Compilation.Arith,
                      Hefty.Compilation.Block,
                      Hefty.Compilation.Common,
@@ -27,6 +29,6 @@ library
                      Hefty.Compilation.Let,
                      Hefty.Compilation.Read,
                      Hefty.Compilation.X86
-    build-depends: base, hefty
+    build-depends: base, containers
     hs-source-dirs: src
     default-language: GHC2021
