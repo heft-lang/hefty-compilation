@@ -26,6 +26,9 @@ instance HTraversable (Cond Name) where
   htraverse _ (Cmp cc x y) = pure $ Cmp cc x y
   htraverse _ (Not x) = pure $ Not x
 
+instance Alpha (m (Name Val)) => Alpha (Cond Name m a) where
+  rename v v' (CIf x y z) = CIf (rename v v' x) (rename v v' y) (rename v v' z)
+
 if' :: (HTraversable h, Fresh < t, Cond Name << h) => Name Val -> TL t h (Name Val) -> TL t h (Name Val) -> TL t h (Name Val)
 if' c t f = flush t >>= \t' -> flush f >>= \f' -> sendR (CIf c t' f')
 

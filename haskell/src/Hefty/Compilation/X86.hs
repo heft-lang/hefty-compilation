@@ -1,4 +1,5 @@
 {-# LANGUAGE GADTs, AllowAmbiguousTypes #-}
+{-# LANGUAGE LambdaCase #-}
 module Hefty.Compilation.X86 where
 
 import Hefty
@@ -7,6 +8,7 @@ import Data.Void
 
 data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
 
+type X86 :: Effect
 data X86 m a where
   Reg :: Reg -> X86 m (Name Val)
   Deref :: Reg -> Int -> X86 m (Name Val)
@@ -37,6 +39,21 @@ instance HTraversable X86 where
   htraverse _ (Pushq x) = pure $ Pushq x
   htraverse _ (Popq x) = pure $ Popq x
   htraverse _ Retq = pure Retq
+
+instance Alpha (X86 m a) where
+  rename v v' = \case
+    Reg r -> Reg r
+    Deref r x -> Deref r x
+    Imm x -> Imm x
+    Addq x y -> Addq (rename v v' x) (rename v v' y)
+    Subq x y -> Subq (rename v v' x) (rename v v' y)
+    Negq x -> Negq (rename v v' x)
+    Movq x y -> Movq (rename v v' x) (rename v v' y)
+    Callq l -> Callq l
+    Globl l -> Globl l
+    Pushq x -> Pushq (rename v v' x)
+    Popq x -> Popq (rename v v' x)
+    Retq -> Retq
 
 reg :: (Fresh < t, X86 << h) => Reg -> TL t h (Name Val)
 reg r = sendR (Reg r)
@@ -74,6 +91,9 @@ data X86Var m a where
 instance HTraversable X86Var where
   htraverse _ X86Var = pure X86Var
 
+instance Alpha (X86Var m a) where
+  rename v v' X86Var = X86Var
+
 x86var :: (Fresh < t, X86Var << h) => TL t h (Name Val)
 x86var = sendR X86Var
 
@@ -94,6 +114,15 @@ instance HTraversable X86Cond where
   htraverse _ (Setcc cc x) = pure $ Setcc cc x
   htraverse _ (Movzbq x y) = pure $ Movzbq x y
   htraverse _ (Jcc cc l) = pure $ Jcc cc l
+
+instance Alpha (X86Cond m a) where
+  rename v v' = \case
+    ByteReg r -> ByteReg r
+    Xorq x y -> Xorq (rename v v' x) (rename v v' y)
+    Cmpq x y -> Cmpq (rename v v' x) (rename v v' y)
+    Setcc cc x -> Setcc cc (rename v v' x)
+    Movzbq x y -> Movzbq (rename v v' x) (rename v v' y)
+    Jcc cc l -> Jcc cc l
 
 byteReg :: (Fresh < t, X86Cond << h) => ByteReg -> TL t h (Name Val)
 byteReg r = sendR (ByteReg r)

@@ -27,12 +27,18 @@ type Effect = (Type -> Type) -> (Type -> Type)
 class HTraversable h where
   htraverse :: Applicative m => (forall x. Alpha x => f x -> m (g x)) -> h f a -> m (h g a)
 
+hmap :: HTraversable h => (forall x. f x -> g x) -> h f a -> h g a
+hmap f = unI . htraverse (I . f)
+
 type HeftyS :: Effect -> Type -> Type
 data HeftyS h a
   = ReturnS a
   | forall c. OpS (h (HeftyS h) (Name c)) (Name c) (HeftyS h a)
 
-instance Functor (HeftyS h) where fmap = liftM
+deriving instance Functor (HeftyS h)
+deriving instance Foldable (HeftyS h)
+deriving instance Traversable (HeftyS h)
+
 instance Applicative (HeftyS h) where pure = ReturnS; (<*>) = ap
 instance Monad (HeftyS h) where
   ReturnS x >>= k = k x
@@ -42,6 +48,10 @@ infixr 6 ++
 type (++) :: Effect -> Effect -> Effect
 data (h1 ++ h2) f a = LH (h1 f a) | RH (h2 f a)
   deriving Functor
+
+instance (HTraversable f, HTraversable g) => HTraversable (f ++ g) where
+  htraverse f (LH x) = LH <$> htraverse f x
+  htraverse f (RH x) = RH <$> htraverse f x
 
 sumH_ :: (h1 f a -> b) -> (h2 f a -> b) -> (h1 ++ h2) f a -> b
 sumH_ f _ (LH x) = f x
@@ -111,7 +121,7 @@ unH (OpS op _ _) = case op of
 -- nopAlg :: Alg NopH f
 -- nopAlg = Alg \case
 
-instance h << h where
+instance {-# OVERLAPPING #-} h << h where
   witnessH = ForephismH (NTH LH <~~> NTH (sumH_ id (\(x :: NopH f k) -> case x of)))
 
 instance {-# OVERLAPPING #-} f << f ++ g where
@@ -194,7 +204,7 @@ instance Alpha (Name a) where
     case eqName x z of
       Just Refl -> y
       Nothing -> z
-instance (forall m x. Alpha (f m x), Alpha a) => Alpha (HeftyS f a) where
+instance (forall m x. (forall y. Alpha y => Alpha (m y)) => Alpha (f m x), Alpha a) => Alpha (HeftyS f a) where
   rename x y (ReturnS z) = ReturnS (rename x y z)
   rename x y (OpS op n k) = OpS (rename x y op) (rename x y n) (rename x y k)
 
@@ -234,13 +244,13 @@ instance f < h => f < (g + h) where
 data Fresh a where
   Fresh :: Fresh (I (Name a))
 
-handleC :: (forall x. g x -> h x) -> (HeftyS t a -> TL h t b) -> (forall x. f x -> (x -> TL h t b) -> TL h t b) -> TL (f + g) t a -> TL h t b
-handleC sub gen alg = go . unTL where
-  go (Pure x) = gen x
-  go (Freer op k) =
+handleC :: (forall x. g x -> h x) -> (p -> HeftyS t a -> TL h t b) -> p -> (forall x. p -> f x -> (p -> x -> TL h t b) -> TL h t b) -> TL (f + g) t a -> TL h t b
+handleC sub gen p alg = go p . unTL where
+  go p (Pure x) = gen p x
+  go p (Freer op k) =
     case op of
-      L op' -> alg op' (go . k)
-      R op' -> TL (Freer (sub op') (unTL . go . k))
+      L op' -> alg p op' (\p x -> go p $ k x)
+      R op' -> TL (Freer (sub op') (unTL . go p . k))
 
 weakenC :: TL g h a -> TL (f + g) h a
 weakenC = TL . weakenFreer . unTL
@@ -249,16 +259,29 @@ weakenFreer :: Freer g a -> Freer (f + g) a
 weakenFreer (Pure x) = Pure x
 weakenFreer (Freer op k) = Freer (R op) (weakenFreer . k)
 
-raise :: HeftyS g a -> TL f g a
-raise x = TL (pure x)
-
 sendC :: f < g => f (I a) -> TL g h (I a)
 sendC x = TL (Freer (inj x) (pure . pure))
+
+weakenR :: forall f g h a. HTraversable h => (forall m x. g m x -> h m x) -> TL f g a -> TL f h a
+weakenR sub m = do
+  x <- flush m
+  lift (go x)
+  where
+    go :: HeftyS g b -> HeftyS h b
+    go x = case x of
+      ReturnS x -> ReturnS x
+      OpS op v k -> OpS (hmap go (sub op)) v (go k)
 
 sendR :: (Fresh < g, f << h) => f (HeftyS h) (Name a) -> TL g h (Name a)
 sendR x = do I n <- sendC Fresh; TL (pure (OpS (injH x) n (ReturnS n)))
 
-handleM :: forall a h g f t. (Alpha a, forall m x. Alpha (f m x), forall m x. Alpha (g m x), HTraversable f, HTraversable g) =>
+sendSubR :: (Fresh < g) => (forall m x. f m x -> h m x) -> f (HeftyS h) (Name a) -> TL g h (Name a)
+sendSubR sub x = do I n <- sendC Fresh; TL (pure (OpS (sub x) n (ReturnS n)))
+
+type AlphaEffect :: Effect -> Constraint
+type AlphaEffect f = forall m x. (forall y. Alpha y => Alpha (m y)) => Alpha (f m x)
+
+handleM :: forall a h g f t. (Alpha a, AlphaEffect f, AlphaEffect g, HTraversable f, HTraversable g) =>
   (forall m x. g m x -> h m x) ->
   (forall x. x -> TL t h x) ->
   (forall x y. f (HeftyS h) (Name x) -> (Name x -> TL t h y) -> TL t h y) ->

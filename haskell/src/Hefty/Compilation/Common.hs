@@ -1,6 +1,10 @@
 module Hefty.Compilation.Common where
+import Hefty (Alpha (rename))
 
 newtype Label = L { getLabel :: String }
+
+instance Alpha Label where
+  rename _ _ x = x
 
 data CC = Eq | Ne | Lt | Le | Gt | Ge deriving (Eq, Show)
 

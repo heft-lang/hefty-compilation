@@ -11,5 +11,8 @@ data Read c m a where
 instance HTraversable (Read c) where
   htraverse _ Read = pure Read
 
+instance Alpha (Read c m a) where
+  rename _ _ Read = Read
+
 read :: (Fresh < t, Read Name << h) => TL t h (Name Val)
 read = sendR Read

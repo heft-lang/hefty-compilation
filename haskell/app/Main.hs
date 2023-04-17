@@ -6,11 +6,18 @@
 {-# HLINT ignore "Use >=>" #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 import Data.Functor.Const
 import Hefty hiding (L)
 import Hefty.Compilation
 import Prelude hiding (Read, not, read)
+import Data.Bifunctor
+import Control.Monad
+import qualified Data.Map as Map
+import GHC.Exts (Any)
+import Unsafe.Coerce
+import Data.Kind (Type)
 
 -- Input language
 
@@ -51,29 +58,29 @@ denote = \case
 
 -- Select Instructions
 
-hArith :: (HTraversable h, X86 << h, X86Var << h) => TL t (Arith c ++ h) a -> TL t h a
+hArith :: (HTraversable h, AlphaEffect h, Alpha a, Fresh < t, X86 << h, X86Var << h) => TL t (Arith Name ++ h) a -> TL t h a
 hArith = handleM id pure \op k -> case op of
   Int n -> imm n >>= k
   Add x y -> x86var >>= \z -> movq x z >> addq y z >> k z
   Sub x y -> x86var >>= \z -> movq x z >> subq y z >> k z
   Neg x -> x86var >>= \z -> movq x z >> negq z >> k z
 
-hRead :: forall c h t a. (HTraversable h, X86 << h, X86Var << h) => Label -> TL t (Read c ++ h) a -> TL t h a
+hRead :: forall c h t a. (HTraversable h, AlphaEffect h, Alpha a, Fresh < t, X86 << h, X86Var << h) => Label -> TL t (Read c ++ h) a -> TL t h a
 hRead read_int = handleM id pure \op k -> case op of
   Read -> x86var >>= \z -> callq read_int >> reg Rax >>= \rax -> movq rax z >> k z
 
-hLet :: (HTraversable h) => TL t (Let ++ h) a -> TL t h a
+hLet :: (HTraversable h, AlphaEffect h, Alpha a, Fresh < t) => TL t (Let ++ h) a -> TL t h a
 hLet = handleM id pure \op k -> case op of
   Let m v f -> lift (m >>= \x -> rename v x f) >>= k
 
 -- TODO: more efficient compilation of if to x86
 
-hCond :: forall c h t a. (HTraversable h, X86 << h, X86Cond << h, X86Var << h, Block << h) => TL t (Cond c ++ h) a -> TL t h a
+hCond :: forall c h t a. (Fresh < t, HTraversable h, Alpha a, AlphaEffect h, X86 << h, X86Cond << h, X86Var << h, Block << h) => TL t (Cond Name ++ h) a -> TL t h a
 hCond = handleM id pure \op k -> case op of
   CIf c t f -> do
     one <- imm 1
     z <- x86var
-    blocks
+    _ <- blocks
       (cmpq c one >> jcc Eq (L "_true") >> lift f >>= \x -> movq x z >> jmp (L "_end"))
       [ (L "_true", lift t >>= \x -> movq x z),
         (L "_end", unI <$> sendC Fresh)
@@ -86,16 +93,19 @@ hCond = handleM id pure \op k -> case op of
 
 selectInstructions ::
   ( HTraversable h,
-    HTraversable (Read c1 ++ (Arith c2 ++ h)),
-    HTraversable (Arith c2 ++ h),
-    HTraversable (Let ++ (Read c1 ++ (Arith c2 ++ h))),
+    HTraversable (Read Name ++ (Arith Name ++ h)),
+    HTraversable (Arith Name ++ h),
+    HTraversable (Let ++ (Read Name ++ (Arith Name ++ h))),
+    AlphaEffect h,
+    Alpha a,
+    Fresh < t,
     X86 << h,
     X86Var << h,
     X86Cond << h,
     Block << h
   ) =>
   Label ->
-  TL t (Cond c3 ++ (Let ++ (Read c1 ++ (Arith c2 ++ h)))) a ->
+  TL t (Cond Name ++ (Let ++ (Read Name ++ (Arith Name ++ h)))) a ->
   TL t h a
 selectInstructions read_int = hArith . hRead read_int . hLet . hCond
 
@@ -114,10 +124,18 @@ selectInstructions read_int = hArith . hRead read_int . hLet . hCond
 --   Imm{} -> k (Const OtherLoc)
 --   _ -> _
 
-countVars :: TL t (X86Var ++ h) a -> TL t h (Int, a)
-countVars = handleC _ _ _ . handleM _ _ (\op k -> case op of
-    X86Var -> Const (1 + getConst (k (Const ()))))
-  . weakenC
+-- data Count a where
+--   Incr :: Count (I ())
+-- 
+-- hCount :: TL (Count + h) t a -> TL h t (Int, a)
+-- hCount = handleC id (\p x -> lift $ (p,) <$> x) 0 (\p op k ->
+--     case op of
+--       Incr -> k (p + 1) (I ()))
+-- 
+-- countVars :: TL t (X86Var ++ h) a -> TL t (X86Var ++ h) (Int, a)
+-- countVars = hCount
+--   . handleM RH pure (\op k -> case op of X86Var -> sendC Incr *> sendR X86Var >>= k)
+--   . weakenC
 
 -- TODO: Generalize countVarsX86Alg
 
@@ -176,14 +194,25 @@ There are several ways around this:
 
 -}
 
-newtype ReaderT r m a = ReaderT (r -> m a)
+-- newtype ReaderT r m a = ReaderT (r -> m a)
+-- 
+-- runReaderT :: r -> ReaderT r m a -> m a
+-- runReaderT r (ReaderT f) = f r
 
-runReaderT :: r -> ReaderT r m a -> m a
-runReaderT r (ReaderT f) = f r
+data State s a where
+  Put :: s -> State s (I ())
+  Get :: State s (I s)
 
-assignHomes :: (HTraversable h, X86 << h) => TL t (X86Var ++ h) a -> TL t h a
-assignHomes = Alg \op k -> case op of
-  X86Var -> ReaderT \n -> deref Rbp (-8 * n) >>= \z -> runReaderT (n + 1) (k z)
+hState :: s -> TL (State s + h) t a -> TL h t (s, a)
+hState s0 = handleC id (\p x -> lift $ (p,) <$> x) s0 $ \p op k ->
+  case op of
+    Put p' -> k p' (I ())
+    Get -> k p (I p)
+
+assignHomes :: (HTraversable h, AlphaEffect h, Alpha a, Fresh < t, X86 << h) => TL t (X86Var ++ h) a -> TL t h (Int, a)
+assignHomes = hState 0 . handleM id pure (\op k -> case op of
+  X86Var -> do I n <- sendC Get; z <- deref Rbp (-8 * n); _ <- sendC (Put (n + 1)); k z)
+  . weakenC
 
 -- liftReaderTAlg :: HTraversable h => Alg h m -> Alg h (ReaderT r m)
 -- liftReaderTAlg (Alg a) = Alg \op k -> ReaderT \r -> a (hmap (runReaderT r) op) (runReaderT r . k)
@@ -193,56 +222,123 @@ assignHomes = Alg \op k -> case op of
 
 -- Patch Instructions
 
-data Patch c a where
-  Memory :: c Val -> Patch c Val
-  Immediate :: c Val -> Patch c Val
-  Other :: c a -> Patch c a
+-- data Patch c a where
+--   Memory :: c Val -> Patch c Val
+--   Immediate :: c Val -> Patch c Val
+--   Other :: c a -> Patch c a
+-- 
+-- unpatch :: Patch c a -> c a
+-- unpatch (Memory x) = x
+-- unpatch (Immediate x) = x
+-- unpatch (Other x) = x
 
-unpatch :: Patch c a -> c a
-unpatch (Memory x) = x
-unpatch (Immediate x) = x
-unpatch (Other x) = x
+type NameMap :: (Type -> Type) -> Type
+newtype NameMap f = NameMap (Map.Map Int (f Any))
 
-patchOp :: (HTraversable h, X86 << h) => (c Val -> c Val -> TL t h a) -> c Val -> c Val -> (() -> TL t h b) -> TL t h b
-patchOp op x y k = reg Rax >>= \z -> movq x z >> op z y >> k ()
+lookupName :: Name a -> NameMap f -> f a
+lookupName (Name x) (NameMap m) = unsafeCoerce (m Map.! x)
 
-patchX86 :: forall c h t a. (HTraversable h, X86 << h) => TL t (X86 ++ h) a -> TL t h a
-patchX86 = Alg \op k -> case op of
-  Addq (Memory x) (Memory y) -> patchOp addq x y k
-  Subq (Memory x) (Memory y) -> patchOp subq x y k
-  Movq (Memory x) (Memory y) -> patchOp movq x y k
-  Reg r -> reg r >>= k . Other
-  Deref r i -> deref r i >>= k . Memory
-  Imm n -> imm n >>= k . Immediate
-  Addq x y -> addq (unpatch x) (unpatch y) >>= k
-  Subq x y -> subq (unpatch x) (unpatch y) >>= k
-  Negq x -> negq (unpatch x) >>= k
-  Movq x y -> movq (unpatch x) (unpatch y) >>= k
-  Callq l -> callq @c l >>= k
-  Globl l -> globl @c l >>= k
-  Pushq x -> pushq (unpatch x) >>= k
-  Popq x -> popq (unpatch x) >>= k
-  Retq -> retq @c
+insertName :: Name a -> f a -> NameMap f -> NameMap f
+insertName (Name k) v (NameMap m) = NameMap (Map.insert k (unsafeCoerce v) m)
 
-patchX86Cond :: forall c h t a. (HTraversable h, X86Cond << h, X86 << h) => TL t (X86Cond ++ h) a -> TL t h a
-patchX86Cond = Alg \op k -> case op of
-  Xorq (Memory x) (Memory y) -> patchOp xorq x y k
-  Cmpq (Memory x) (Memory y) -> patchOp cmpq x y k
-  Cmpq x (Immediate y) -> reg Rax >>= \rax -> movq y rax >> cmpq (unpatch x) rax >>= k
-  Movzbq x (Memory y) -> reg Rax >>= \rax -> movzbq (unpatch x) rax >> movq rax y >>= k
-  ByteReg r -> byteReg r >>= k . Other
-  Xorq x y -> xorq (unpatch x) (unpatch y) >>= k
-  Cmpq x y -> cmpq (unpatch x) (unpatch y) >>= k
-  Setcc cc x -> setcc cc (unpatch x) >>= k
-  Movzbq x y -> movzbq (unpatch x) (unpatch y) >>= k
-  Jcc cc l -> jcc @c cc l >>= k
+emptyNameMap :: NameMap f
+emptyNameMap = NameMap Map.empty
+
+data AccessType = Memory | Immediate | Other
+
+class HTraversable f => Patch f where
+  getAccessType :: f m (Name a) -> AccessType
+  patch :: (Fresh < t, X86 << g, Patch g) => (forall m x. f m x -> g m x) -> NameMap (Const AccessType) -> f (HeftyS g) (Name a) -> TL t g (Name a)
+
+instance (Patch f, Patch g) => Patch (f ++ g) where
+  getAccessType (LH x) = getAccessType x
+  getAccessType (RH x) = getAccessType x
+  patch sub m (LH x) = patch (sub . LH) m x
+  patch sub m (RH x) = patch (sub . RH) m x
+
+instance Patch X86 where
+  getAccessType Imm{} = Immediate
+  getAccessType Deref{} = Memory
+  getAccessType _ = Other
+
+  patch _ m = \case
+    Addq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> addq z y
+    Subq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> subq z y
+    Movq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> movq z y
+    x -> sendR x
+    where (!) m k = getConst $ lookupName k m
+
+instance Patch X86Cond where
+  getAccessType _ = Other
+
+  patch sub m = \case
+    Xorq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \rax -> movq x rax >> sendSubR sub (Xorq rax y)
+    Cmpq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \rax -> movq x rax >> sendSubR sub (Cmpq rax y)
+    Cmpq x y | Immediate <- m ! y -> reg Rax >>= \rax -> movq y rax >> sendSubR sub (Cmpq x rax)
+    Movzbq x y | Memory <- m ! y -> reg Rax >>= \rax -> sendSubR sub (Movzbq x rax) >> movq rax y
+    x -> sendSubR sub x
+    where (!) m k = getConst $ lookupName k m
+
+instance Patch Block where
+  getAccessType _ = Other
+  patch sub m (Blocks b bs) = do
+    b' <- flush (patchHeftyS m b)
+    bs' <- traverse (traverse (flush . patchHeftyS m)) bs
+    sendSubR sub $ Blocks b' bs'
+  patch sub _ (Jmp l) = sendSubR sub $ Jmp l
+
+patchHeftyS :: (Patch h, Fresh < t, X86 << h) => NameMap (Const AccessType) -> HeftyS h a -> TL t h a
+patchHeftyS = go where
+  go _ (ReturnS x) = pure x
+  go m (OpS op n k) = 
+    patch id m op >> go (insertName n (Const (getAccessType op)) m) k
+
+patchInstructions :: (Fresh < f, X86 << g, Patch g) => TL f g (Name Val) -> TL f g (Name Val)
+patchInstructions = flush >=> patchHeftyS emptyNameMap
+
+-- patchOp :: (HTraversable h, X86 << h) => (c Val -> c Val -> TL t h a) -> c Val -> c Val -> (() -> TL t h b) -> TL t h b
+-- patchOp op x y k = reg Rax >>= \z -> movq x z >> op z y >> k ()
+
+-- patchX86 :: forall c h t a. (HTraversable h, X86 << h) => TL t (X86 ++ h) a -> TL t h a
+-- patchX86 = Alg \op k -> case op of
+--   Addq (Memory x) (Memory y) -> patchOp addq x y k
+--   Subq (Memory x) (Memory y) -> patchOp subq x y k
+--   Movq (Memory x) (Memory y) -> patchOp movq x y k
+--
+--   Reg r -> reg r >>= k . Other
+--   Deref r i -> deref r i >>= k . Memory
+--   Imm n -> imm n >>= k . Immediate
+--
+--   Addq x y -> addq (unpatch x) (unpatch y) >>= k
+--   Subq x y -> subq (unpatch x) (unpatch y) >>= k
+--   Negq x -> negq (unpatch x) >>= k
+--   Movq x y -> movq (unpatch x) (unpatch y) >>= k
+--   Callq l -> callq @c l >>= k
+--   Globl l -> globl @c l >>= k
+--   Pushq x -> pushq (unpatch x) >>= k
+--   Popq x -> popq (unpatch x) >>= k
+--   Retq -> retq @c
+-- 
+-- patchX86Cond :: forall c h t a. (HTraversable h, X86Cond << h, X86 << h) => TL t (X86Cond ++ h) a -> TL t h a
+-- patchX86Cond = Alg \op k -> case op of
+--   Xorq (Memory x) (Memory y) -> patchOp xorq x y k
+--   Cmpq (Memory x) (Memory y) -> patchOp cmpq x y k
+--   Cmpq x (Immediate y) -> reg Rax >>= \rax -> movq y rax >> cmpq (unpatch x) rax >>= k
+--   Movzbq x (Memory y) -> reg Rax >>= \rax -> movzbq (unpatch x) rax >> movq rax y >>= k
+--
+--   ByteReg r -> byteReg r >>= k . Other
+--   Xorq x y -> xorq (unpatch x) (unpatch y) >>= k
+--   Cmpq x y -> cmpq (unpatch x) (unpatch y) >>= k
+--   Setcc cc x -> setcc cc (unpatch x) >>= k
+--   Movzbq x y -> movzbq (unpatch x) (unpatch y) >>= k
+--   Jcc cc l -> jcc @c cc l >>= k
 
 -- patchInstructions :: Hefty (X86 (Patch c) ++ X86Cond (Patch c) ++ Block) (Patch c a) -> Hefty (X86 c ++ X86Cond c ++ Block) (c a)
 -- patchInstructions = fmap unpatch . foldH pure (patchX86 ++~ patchX86Cond ++~ injAlg)
 
 -- Add Prelude and Conclusion
 
-preludeAndConclusion :: forall t. Int -> TL t (X86 ++ X86Cond ++ Block) (Name Val) -> TL t (X86 ++ X86Cond ++ Block) (Name ())
+preludeAndConclusion :: forall t. (Fresh < t) => Int -> TL t (X86 ++ X86Cond ++ Block) (Name Val) -> TL t (X86 ++ X86Cond ++ Block) (Name ())
 preludeAndConclusion varCount x = do
   rbp <- reg Rbp
   rsp <- reg Rsp
@@ -341,7 +437,7 @@ prettyCC = \case
 
 main :: IO ()
 main =
-  let program :: (HTraversable h, Fresh < t, Arith Name << h, Cond Name << h, Read Name << h, Let << h) => TL t h (Name Val)
+  let program :: (HTraversable h, Fresh < t, AlphaEffect h, Arith Name << h, Cond Name << h, Read Name << h, Let << h) => TL t h (Name Val)
       program = denote $
         LLet LRead \x ->
           LLet LRead \y ->
@@ -349,14 +445,18 @@ main =
               (LCmp Ge (LVar x) (LVar y))
               (LSub (LVar x) (LVar y))
               (LSub (LVar y) (LVar x))
+      selected :: (Fresh < t) => TL t (X86Var ++ (X86 ++ (X86Cond ++ Block))) (Name Val)
       selected = selectInstructions (L "_read_int") program
       -- I believe this double use of 'selected' will cause the whole pipeline up to that point to be executed twice.
-      count = countVars selected
       assigned = assignHomes selected
-      patched = patchInstructions assigned
-      full = preludeAndConclusion count patched
-      pretty = prettyPrint full
-   in putStrLn pretty
+      full = join $ do
+        x <- flush assigned
+        let
+          (count, _) = extract x
+          patched = patchInstructions (fmap snd assigned)
+        pure $ preludeAndConclusion count patched
+      -- pretty = prettyPrint full
+   in pure () -- putStrLn pretty
 
 -- TODO:
 -- [x] Weaken let2set_Alg
