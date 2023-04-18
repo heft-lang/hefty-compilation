@@ -385,7 +385,7 @@ instance (Pretty f, Pretty g) => Pretty (f ++ g) where
   prettyVar (RH x) = prettyVar x
 
 pOp :: String -> [String] -> String -> String
-pOp op xs = (("\n\t" ++ op ++ " " ++ intercalate ", " xs) ++)
+pOp op xs = (("\t" ++ op ++ " " ++ intercalate ", " xs ++ "\n") ++)
 
 instance Pretty X86 where
   prettyOp m = \case
@@ -397,7 +397,7 @@ instance Pretty X86 where
     Negq x -> pOp "negq" [m ! x]
     Movq x y -> pOp "movq" [m ! x, m ! y]
     Callq l -> pOp "callq" [getLabel l]
-    Globl l -> (("\n" ++ ".globl " ++ getLabel l) ++)
+    Globl l -> ((".globl " ++ getLabel l ++ "\n") ++)
     Pushq x -> pOp "pushq" [m ! x]
     Popq x -> pOp "popq" [m ! x]
     Retq -> pOp "retq" []
@@ -422,7 +422,7 @@ instance Pretty X86Cond where
   prettyVar _ = "()"
 
 instance Pretty Block where
-  prettyOp m (Blocks b bs) = prettyHeftyS m b . foldr (\(L lbl, x) xs -> (("\n" ++ lbl ++ ":\n") ++) . prettyHeftyS m x . xs) id bs
+  prettyOp m (Blocks b bs) = prettyHeftyS m b . foldr (\(L lbl, x) xs -> ((lbl ++ ":\n") ++) . prettyHeftyS m x . xs) id bs
 
   prettyOp _ (Jmp l) = pOp "jmp" [getLabel l]
   prettyVar _ = "()"
