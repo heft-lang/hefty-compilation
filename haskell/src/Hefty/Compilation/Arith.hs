@@ -10,6 +10,7 @@ data Arith c m a where
   Sub :: c Val -> c Val -> Arith c m (c Val)
   Neg :: c Val -> Arith c m (c Val)
   Int :: Int -> Arith c m (c Val)
+deriving instance Show (Arith Name m a)
 
 instance HTraversable (Arith c) where
   htraverse _ (Add x y) = pure $ Add x y

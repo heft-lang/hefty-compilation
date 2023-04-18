@@ -35,6 +35,8 @@ data HeftyS h a
   = ReturnS a
   | forall c. OpS (h (HeftyS h) (Name c)) (Name c) (HeftyS h a)
 
+deriving instance (forall x. Show (h (HeftyS h) (Name x)), Show a) => Show (HeftyS h a)
+
 deriving instance Functor (HeftyS h)
 deriving instance Foldable (HeftyS h)
 deriving instance Traversable (HeftyS h)
@@ -47,7 +49,7 @@ instance Monad (HeftyS h) where
 infixr 6 ++
 type (++) :: Effect -> Effect -> Effect
 data (h1 ++ h2) f a = LH (h1 f a) | RH (h2 f a)
-  deriving Functor
+  deriving (Functor, Show)
 
 instance (HTraversable f, HTraversable g) => HTraversable (f ++ g) where
   htraverse f (LH x) = LH <$> htraverse f x
@@ -145,13 +147,13 @@ instance (f << g) => f << h ++ g where
 -- injAlg :: h << g => Alg h (HeftyS g)
 -- injAlg = Alg (OpS . injH)
 
-newtype I a = I { unI :: a } deriving Functor
+newtype I a = I { unI :: a } deriving (Show, Functor)
 instance Applicative I where
   pure = I
   I f <*> I x = I (f x)
 
 type Name :: Type -> Type
-newtype Name a = Name Int
+newtype Name a = Name Int deriving Show
 type role Name nominal
 
 -- Day (Freer f) (HeftyS g) a = (Freer f b, HeftyS g c, b -> c -> a)
@@ -244,6 +246,11 @@ instance f < h => f < (g + h) where
 data Fresh a where
   Fresh :: Fresh (I (Name a))
 
+hFresh :: TL (Fresh + f) g a -> TL f g a
+hFresh = handleC id (const lift) (0 :: Int) $ \p op k ->
+  case op of
+    Fresh -> k (p + 1) (I (Name p))
+
 handleC :: (forall x. g x -> h x) -> (p -> HeftyS t a -> TL h t b) -> p -> (forall x. p -> f x -> (p -> x -> TL h t b) -> TL h t b) -> TL (f + g) t a -> TL h t b
 handleC sub gen p alg = go p . unTL where
   go p (Pure x) = gen p x
@@ -314,3 +321,9 @@ hoist f (TL x) = TL (f <$> x)
 
 lift :: HeftyS h a -> TL t h a
 lift = TL . Pure
+
+data Nil a
+data NilH m a
+
+nilTL :: TL Nil NilH a -> a
+nilTL (TL (Pure (ReturnS x))) = x

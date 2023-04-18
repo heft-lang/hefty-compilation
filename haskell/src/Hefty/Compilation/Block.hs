@@ -11,6 +11,8 @@ data Block m a where
   Blocks :: m (Name ()) -> [(Label, m (Name ()))] -> Block m (Name ()) 
   Jmp :: Label -> Block m a
 
+deriving instance (Show (m (Name ()))) => Show (Block m a)
+
 instance HTraversable Block where
   htraverse f (Blocks x xs) = Blocks <$> f x <*> traverse (\(x,y) -> (x,) <$> f y) xs
   htraverse _ (Jmp lbl) = pure $ Jmp lbl

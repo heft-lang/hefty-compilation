@@ -26,6 +26,8 @@ data X86 m a where
   Popq :: Name Val -> X86 m (Name ())
   Retq :: X86 m a
 
+deriving instance Show (X86 m a)
+
 instance HTraversable X86 where
   htraverse _ (Reg r) = pure $ Reg r
   htraverse _ (Deref r i) = pure $ Deref r i
@@ -88,6 +90,8 @@ retq = sendR Retq
 data X86Var m a where
   X86Var :: X86Var m (Name Val)
 
+deriving instance Show (X86Var m a)
+
 instance HTraversable X86Var where
   htraverse _ X86Var = pure X86Var
 
@@ -106,6 +110,8 @@ data X86Cond m a where
   Setcc :: CC -> Name Val -> X86Cond m (Name ())
   Movzbq :: Name Val -> Name Val -> X86Cond m (Name ()) -- 8bit -> 64bit
   Jcc :: CC -> Label -> X86Cond m (Name ())
+
+deriving instance Show (X86Cond m a)
 
 instance HTraversable X86Cond where
   htraverse _ (ByteReg r) = pure $ ByteReg r

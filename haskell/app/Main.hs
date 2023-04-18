@@ -18,6 +18,9 @@ import qualified Data.Map as Map
 import GHC.Exts (Any)
 import Unsafe.Coerce
 import Data.Kind (Type)
+import GHC.Stack (HasCallStack)
+import Debug.Trace
+import Data.List (intercalate)
 
 -- Input language
 
@@ -248,7 +251,7 @@ data AccessType = Memory | Immediate | Other
 
 class HTraversable f => Patch f where
   getAccessType :: f m (Name a) -> AccessType
-  patch :: (Fresh < t, X86 << g, Patch g) => (forall m x. f m x -> g m x) -> NameMap (Const AccessType) -> f (HeftyS g) (Name a) -> TL t g (Name a)
+  patch :: (Fresh < t, X86 << g, Patch g, AlphaEffect g) => (forall m x. f m x -> g m x) -> NameMap (Const AccessType) -> f (HeftyS g) (Name a) -> TL t g (Name a)
 
 instance (Patch f, Patch g) => Patch (f ++ g) where
   getAccessType (LH x) = getAccessType x
@@ -261,11 +264,11 @@ instance Patch X86 where
   getAccessType Deref{} = Memory
   getAccessType _ = Other
 
-  patch _ m = \case
+  patch sub m = \case
     Addq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> addq z y
     Subq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> subq z y
     Movq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> movq z y
-    x -> sendR x
+    x -> sendSubR sub x
     where (!) m k = getConst $ lookupName k m
 
 instance Patch X86Cond where
@@ -287,13 +290,14 @@ instance Patch Block where
     sendSubR sub $ Blocks b' bs'
   patch sub _ (Jmp l) = sendSubR sub $ Jmp l
 
-patchHeftyS :: (Patch h, Fresh < t, X86 << h) => NameMap (Const AccessType) -> HeftyS h a -> TL t h a
+patchHeftyS :: forall h t a. (Patch h, Fresh < t, X86 << h, AlphaEffect h, Alpha a) => NameMap (Const AccessType) -> HeftyS h a -> TL t h a
 patchHeftyS = go where
+  go :: NameMap (Const AccessType) -> HeftyS h a -> TL t h a
   go _ (ReturnS x) = pure x
   go m (OpS op n k) = 
-    patch id m op >> go (insertName n (Const (getAccessType op)) m) k
+    patch id m op >>= \n' -> go (insertName n' (Const (getAccessType op)) m) (rename n n' k)
 
-patchInstructions :: (Fresh < f, X86 << g, Patch g) => TL f g (Name Val) -> TL f g (Name Val)
+patchInstructions :: (Fresh < f, X86 << g, Patch g, AlphaEffect g) => TL f g (Name Val) -> TL f g (Name Val)
 patchInstructions = flush >=> patchHeftyS emptyNameMap
 
 -- patchOp :: (HTraversable h, X86 << h) => (c Val -> c Val -> TL t h a) -> c Val -> c Val -> (() -> TL t h b) -> TL t h b
@@ -370,6 +374,68 @@ preludeAndConclusion varCount x = do
 
 -- Pretty Print
 
+class HTraversable f => Pretty f where
+  prettyOp :: Pretty g => NameMap (Const String) -> f (HeftyS g) (Name a) -> String -> String
+  prettyVar :: f (HeftyS g) (Name a) -> String
+
+instance (Pretty f, Pretty g) => Pretty (f ++ g) where
+  prettyOp m (LH x) = prettyOp m x
+  prettyOp m (RH x) = prettyOp m x
+  prettyVar (LH x) = prettyVar x
+  prettyVar (RH x) = prettyVar x
+
+pOp :: String -> [String] -> String -> String
+pOp op xs = (("\n\t" ++ op ++ " " ++ intercalate ", " xs) ++)
+
+instance Pretty X86 where
+  prettyOp m = \case
+    Reg{} -> id
+    Deref{} -> id
+    Imm{} -> id
+    Addq x y -> pOp "addq" [m ! x, m ! y]
+    Subq x y -> pOp "subq" [m ! x, m ! y]
+    Negq x -> pOp "negq" [m ! x]
+    Movq x y -> pOp "movq" [m ! x, m ! y]
+    Callq l -> pOp "callq" [getLabel l]
+    Globl l -> (("\n" ++ ".globl " ++ getLabel l) ++)
+    Pushq x -> pOp "pushq" [m ! x]
+    Popq x -> pOp "popq" [m ! x]
+    Retq -> pOp "retq" []
+    where
+      m ! k = getConst $ lookupName k m
+  prettyVar (Reg r) = prettyReg r
+  prettyVar (Deref r i) = show i ++ "(" ++ prettyReg r ++ ")"
+  prettyVar (Imm n) = "$" ++ show n
+  prettyVar _ = "()"
+
+instance Pretty X86Cond where
+  prettyOp m = \case
+    ByteReg{} -> id
+    Xorq x y -> pOp "xorq" [m ! x, m ! y]
+    Cmpq x y -> pOp "cmpq" [m ! x, m ! y]
+    Setcc cc x -> pOp ("set" ++ prettyCC cc) [m ! x]
+    Movzbq x y -> pOp "movzbq" [m ! x, m ! y]
+    Jcc cc l -> pOp ("j" ++ prettyCC cc) [getLabel l]
+    where
+      m ! k = getConst $ lookupName k m
+  prettyVar (ByteReg r) = prettyByteReg r
+  prettyVar _ = "()"
+
+instance Pretty Block where
+  prettyOp m (Blocks b bs) = prettyHeftyS m b . foldr (\(L lbl, x) xs -> (("\n" ++ lbl ++ ":\n") ++) . prettyHeftyS m x . xs) id bs
+
+  prettyOp _ (Jmp l) = pOp "jmp" [getLabel l]
+  prettyVar _ = "()"
+
+prettyHeftyS :: (Pretty h) => NameMap (Const String) -> HeftyS h a -> String -> String
+prettyHeftyS = go where
+  go _ ReturnS{} = id
+  go m (OpS op n k) = prettyOp m op . go (insertName n (Const (prettyVar op)) m) k
+
+prettyPrint :: (Pretty g) => TL f g (Name ()) -> TL f g' String
+prettyPrint = fmap (($ "") . prettyHeftyS emptyNameMap) . flush
+
+
 prettyReg :: Reg -> String
 prettyReg Rax = "%rax"
 prettyReg Rsp = "%rsp"
@@ -438,13 +504,13 @@ prettyCC = \case
 main :: IO ()
 main =
   let program :: (HTraversable h, Fresh < t, AlphaEffect h, Arith Name << h, Cond Name << h, Read Name << h, Let << h) => TL t h (Name Val)
-      program = denote $
-        LLet LRead \x ->
-          LLet LRead \y ->
-            LIf
-              (LCmp Ge (LVar x) (LVar y))
-              (LSub (LVar x) (LVar y))
-              (LSub (LVar y) (LVar x))
+      program = denote $ LAdd (LInt 1) (LInt 2)
+--         LLet LRead \x ->
+--            LLet LRead \y ->
+--              LIf
+--                (LCmp Ge (LVar x) (LVar y))
+--                (LSub (LVar x) (LVar y))
+--                (LSub (LVar y) (LVar x))
       selected :: (Fresh < t) => TL t (X86Var ++ (X86 ++ (X86Cond ++ Block))) (Name Val)
       selected = selectInstructions (L "_read_int") program
       -- I believe this double use of 'selected' will cause the whole pipeline up to that point to be executed twice.
@@ -455,8 +521,8 @@ main =
           (count, _) = extract x
           patched = patchInstructions (fmap snd assigned)
         pure $ preludeAndConclusion count patched
-      -- pretty = prettyPrint full
-   in pure () -- putStrLn pretty
+      pretty = prettyPrint full
+   in putStrLn $ nilTL (hFresh pretty)
 
 -- TODO:
 -- [x] Weaken let2set_Alg
