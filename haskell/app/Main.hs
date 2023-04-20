@@ -14,13 +14,16 @@ import Hefty.Compilation
 import Prelude hiding (Read, not, read)
 import Data.Bifunctor
 import Control.Monad
+import Data.Map (Map)
 import qualified Data.Map as Map
 import GHC.Exts (Any)
 import Unsafe.Coerce
 import Data.Kind (Type)
-import GHC.Stack (HasCallStack)
 import Debug.Trace
 import Data.List (intercalate)
+import Data.Set (Set)
+import qualified Data.Set as Set
+import Data.Maybe (fromMaybe)
 
 -- Input language
 
@@ -45,18 +48,42 @@ data L v
 denote :: (HTraversable h, Fresh < t, Arith Name << h, Read Name << h, Let << h, Cond Name << h) => L (Name Val) -> TL t h (Name Val)
 denote = \case
   LInt n -> int n
-  LAdd x y -> denote x >>= \dx -> denote y >>= \dy -> add dx dy
-  LSub x y -> denote x >>= \dx -> denote y >>= \dy -> sub dx dy
-  LNeg x -> denote x >>= neg
+  LAdd x y -> do
+    dx <- denote x
+    dy <- denote y
+    add dx dy
+  LSub x y -> do
+    dx <- denote x
+    dy <- denote y
+    sub dx dy
+  LNeg x -> do
+    dx <- denote x
+    neg dx
+
   LRead -> read
-  LLet x f -> let' (denote x) (denote . f)
-  LIf c t f -> denote c >>= \dc -> if' dc (denote t) (denote f)
+
+  LLet x f ->
+    let' (denote x) $ \vx ->
+      denote (f vx)
+
+  LIf c t f -> do
+    dc <- denote c
+    if' dc (denote t) (denote f)
   LFalse -> false
   LTrue -> true
-  LCmp cc x y -> denote x >>= \dx -> denote y >>= \dy -> cmp cc dx dy
-  LNot x -> denote x >>= not
-  LAnd x y -> denote x >>= \dx -> if' dx (denote y) false
-  LOr x y -> denote x >>= \dx -> if' dx true (denote y)
+  LCmp cc x y -> do
+    dx <- denote x
+    dy <- denote y
+    cmp cc dx dy
+  LNot x -> do
+    dx <- denote x
+    not dx
+  LAnd x y -> do
+    dx <- denote x
+    if' dx (denote y) false
+  LOr x y -> do
+    dx <- denote x
+    if' dx true (denote y)
   LVar v -> pure v
 
 -- Select Instructions
@@ -78,7 +105,7 @@ hLet = handleM id pure \op k -> case op of
 
 -- TODO: more efficient compilation of if to x86
 
-hCond :: forall c h t a. (Fresh < t, HTraversable h, Alpha a, AlphaEffect h, X86 << h, X86Cond << h, X86Var << h, Block << h) => TL t (Cond Name ++ h) a -> TL t h a
+hCond :: forall h t a. (Fresh < t, HTraversable h, Alpha a, AlphaEffect h, X86 << h, X86Cond << h, X86Var << h, Block << h) => TL t (Cond Name ++ h) a -> TL t h a
 hCond = handleM id pure \op k -> case op of
   CIf c t f -> do
     one <- imm 1
@@ -111,6 +138,48 @@ selectInstructions ::
   TL t (Cond Name ++ (Let ++ (Read Name ++ (Arith Name ++ h)))) a ->
   TL t h a
 selectInstructions read_int = hArith . hRead read_int . hLet . hCond
+
+
+-- Uncover Live
+
+-- Liveness analysis is a backwards dataflow analysis. This could perhaps be captures as a backwards state monad.
+-- but the backwards state monad cannot be written as a freer monad over some functor (at least if it is combined with other functors).
+-- However, we can use a writer which writes state updates as endomorphisms on the state and compose them backwards.
+
+-- I should make a type class which allows compiler writers to define how operations affect the live set.
+-- Then like patchInstructions, I can fold over the program.
+
+class Live f where
+  live :: Live g => f (HeftyS g) (Name a) -> Map Label (Set (Name Val)) -> Set (Name Val) -> Set (Name Val)
+
+instance Live X86 where
+  live (Movq x y) _ = Set.insert x . Set.delete y
+  live (Addq x y) _ = Set.insert x . Set.insert y
+  live (Subq x y) _ = Set.insert x . Set.insert y
+  live (Negq x) _ = Set.insert x
+  live (Pushq x) _ = Set.insert x
+  live (Popq x) _ = Set.delete x
+  live (Callq _) _ = _todo
+  live Reg{} _ = id
+  live Deref{} _ = id
+  live Imm{} _ = id
+  live Retq{} _ = id
+  live Globl{} _ = id
+
+instance Live X86Var where
+  live X86Var _ = id
+
+instance Live X86Cond where
+  live (Movzbq x y) _ = Set.insert x . Set.delete y
+  live (Xorq x y) _ = Set.insert x . Set.insert y
+  live (Cmpq x y) _ = Set.insert x . Set.insert y
+  live (Setcc _ x) _ = Set.delete x
+  live (Jcc _ l) m = maybe id Set.union (Map.lookup l m)
+  live ByteReg{} _ = id
+
+instance Live Block where
+  live (Blocks b bs) _ = _todo
+  live (Jmp l) m = const (fromMaybe Set.empty (Map.lookup l m))
 
 -- Assign Homes
 
@@ -236,7 +305,7 @@ assignHomes = hState 0 . handleM id pure (\op k -> case op of
 -- unpatch (Other x) = x
 
 type NameMap :: (Type -> Type) -> Type
-newtype NameMap f = NameMap (Map.Map Int (f Any))
+newtype NameMap f = NameMap (Map Int (f Any))
 
 lookupName :: Name a -> NameMap f -> f a
 lookupName (Name x) (NameMap m) = unsafeCoerce (m Map.! x)
@@ -269,7 +338,7 @@ instance Patch X86 where
     Subq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> subq z y
     Movq x y | Memory <- m ! x, Memory <- m ! y -> reg Rax >>= \z -> movq x z >> movq z y
     x -> sendSubR sub x
-    where (!) m k = getConst $ lookupName k m
+    where m ! k = getConst $ lookupName k m
 
 instance Patch X86Cond where
   getAccessType _ = Other
@@ -280,7 +349,7 @@ instance Patch X86Cond where
     Cmpq x y | Immediate <- m ! y -> reg Rax >>= \rax -> movq y rax >> sendSubR sub (Cmpq x rax)
     Movzbq x y | Memory <- m ! y -> reg Rax >>= \rax -> sendSubR sub (Movzbq x rax) >> movq rax y
     x -> sendSubR sub x
-    where (!) m k = getConst $ lookupName k m
+    where m ! k = getConst $ lookupName k m
 
 instance Patch Block where
   getAccessType _ = Other
@@ -434,7 +503,6 @@ prettyHeftyS = go where
 
 prettyPrint :: (Pretty g) => TL f g (Name ()) -> TL f g' String
 prettyPrint = fmap (($ "") . prettyHeftyS emptyNameMap) . flush
-
 
 prettyReg :: Reg -> String
 prettyReg Rax = "%rax"

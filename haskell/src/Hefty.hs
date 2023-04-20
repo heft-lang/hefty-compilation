@@ -30,6 +30,10 @@ class HTraversable h where
 hmap :: HTraversable h => (forall x. f x -> g x) -> h f a -> h g a
 hmap f = unI . htraverse (I . f)
 
+-- Could this be implemented as a rose tree?
+-- I think it is better to move the names to the h effects themselves instead of keeping it in the Hefty tree.
+-- That way operations that don't bind anything don't have to carry any name at all.
+-- A drawback may be that a type class will be necessary to operate on that binding.
 type HeftyS :: Effect -> Type -> Type
 data HeftyS h a
   = ReturnS a
@@ -153,7 +157,7 @@ instance Applicative I where
   I f <*> I x = I (f x)
 
 type Name :: Type -> Type
-newtype Name a = Name Int deriving Show
+newtype Name a = Name Int deriving (Eq, Ord, Show)
 type role Name nominal
 
 -- Day (Freer f) (HeftyS g) a = (Freer f b, HeftyS g c, b -> c -> a)

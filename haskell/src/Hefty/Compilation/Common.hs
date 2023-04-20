@@ -1,7 +1,7 @@
 module Hefty.Compilation.Common where
 import Hefty (Alpha (rename))
 
-newtype Label = L { getLabel :: String } deriving Show
+newtype Label = L { getLabel :: String } deriving (Eq, Ord, Show)
 
 instance Alpha Label where
   rename _ _ x = x
