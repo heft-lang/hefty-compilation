@@ -6,7 +6,11 @@ import Hefty
 import Hefty.Compilation.Common
 import Data.Void
 
-data Reg = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi deriving (Eq, Show)
+data Reg
+  = Rsp | Rbp | Rax | Rbx | Rcx | Rdx | Rsi | Rdi
+  | R1 | R2 | R3 | R4 | R5 | R6 | R7 | R8 | R9 | R10
+  | R11 | R12 | R13 | R14 | R15
+  deriving (Eq, Ord, Show)
 
 type X86 :: Effect
 data X86 m a where
@@ -44,15 +48,18 @@ instance HTraversable X86 where
 
 instance Alpha (X86 m a) where
   rename v v' = \case
+
     Reg r -> Reg r
     Deref r x -> Deref r x
     Imm x -> Imm x
+
+    Globl l -> Globl l
+
     Addq x y -> Addq (rename v v' x) (rename v v' y)
     Subq x y -> Subq (rename v v' x) (rename v v' y)
     Negq x -> Negq (rename v v' x)
     Movq x y -> Movq (rename v v' x) (rename v v' y)
     Callq l -> Callq l
-    Globl l -> Globl l
     Pushq x -> Pushq (rename v v' x)
     Popq x -> Popq (rename v v' x)
     Retq -> Retq

@@ -12,14 +12,12 @@ import Data.Functor.Const
 import Hefty hiding (L)
 import Hefty.Compilation
 import Prelude hiding (Read, not, read)
-import Data.Bifunctor
 import Control.Monad
 import Data.Map (Map)
 import qualified Data.Map as Map
 import GHC.Exts (Any)
 import Unsafe.Coerce
 import Data.Kind (Type)
-import Debug.Trace
 import Data.List (intercalate)
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -111,8 +109,8 @@ hCond = handleM id pure \op k -> case op of
     one <- imm 1
     z <- x86var
     _ <- blocks
-      (cmpq c one >> jcc Eq (L "_true") >> lift f >>= \x -> movq x z >> jmp (L "_end"))
-      [ (L "_true", lift t >>= \x -> movq x z),
+      [ (L "_cond", cmpq c one >> jcc Eq (L "_true") >> lift f >>= \x -> movq x z >> jmp (L "_end")),
+        (L "_true", lift t >>= \x -> movq x z),
         (L "_end", unI <$> sendC Fresh)
       ]
     k z
@@ -150,16 +148,25 @@ selectInstructions read_int = hArith . hRead read_int . hLet . hCond
 -- Then like patchInstructions, I can fold over the program.
 
 class Live f where
-  live :: Live g => f (HeftyS g) (Name a) -> Map Label (Set (Name Val)) -> Set (Name Val) -> Set (Name Val)
+  live :: Live g => f (HeftyS g) (Name a) -> Map Label (Set (Either Reg (Name Val))) -> Set (Either Reg (Name Val)) -> Set (Either Reg (Name Val))
+
+callerSaved :: Set (Either Reg (Name Val))
+callerSaved = Set.fromList $ map Left [Rax, Rcx, Rdx, Rsi, Rdi, R8, R9, R10, R11]
+
+calleeSaved :: Set (Either Reg (Name Val))
+calleeSaved = Set.fromList $ map Left [Rbp, Rbx, R12, R13, R14, R15]
+
+funArg :: [Reg]
+funArg = [Rsi, Rdx, Rcx, R8, R9]
 
 instance Live X86 where
-  live (Movq x y) _ = Set.insert x . Set.delete y
-  live (Addq x y) _ = Set.insert x . Set.insert y
-  live (Subq x y) _ = Set.insert x . Set.insert y
-  live (Negq x) _ = Set.insert x
-  live (Pushq x) _ = Set.insert x
-  live (Popq x) _ = Set.delete x
-  live (Callq _) _ = _todo
+  live (Movq x y) _ = Set.insert (Right x) . Set.delete (Right y)
+  live (Addq x y) _ = Set.insert (Right x) . Set.insert (Right y)
+  live (Subq x y) _ = Set.insert (Right x) . Set.insert (Right y)
+  live (Negq x) _ = Set.insert (Right x)
+  live (Pushq x) _ = Set.insert (Right x)
+  live (Popq x) _ = Set.delete (Right x)
+  live (Callq _) _ = Set.union calleeSaved . Set.difference callerSaved
   live Reg{} _ = id
   live Deref{} _ = id
   live Imm{} _ = id
@@ -170,16 +177,26 @@ instance Live X86Var where
   live X86Var _ = id
 
 instance Live X86Cond where
-  live (Movzbq x y) _ = Set.insert x . Set.delete y
-  live (Xorq x y) _ = Set.insert x . Set.insert y
-  live (Cmpq x y) _ = Set.insert x . Set.insert y
-  live (Setcc _ x) _ = Set.delete x
+  live (Movzbq x y) _ = Set.insert (Right x) . Set.delete (Right y)
+  live (Xorq x y) _ = Set.insert (Right x) . Set.insert (Right y)
+  live (Cmpq x y) _ = Set.insert (Right x) . Set.insert (Right y)
+  live (Setcc _ x) _ = Set.delete (Right x)
   live (Jcc _ l) m = maybe id Set.union (Map.lookup l m)
   live ByteReg{} _ = id
 
 instance Live Block where
-  live (Blocks b bs) _ = _todo
-  live (Jmp l) m = const (fromMaybe Set.empty (Map.lookup l m))
+  live (Blocks []) _ s0 = s0
+  live (Blocks bs) m0 s0 = (Map.! fst (head bs)) $ loop m0 where
+    loop m
+      | m == m' = m
+      | otherwise = loop m'
+      where
+        m' = Map.unionWith Set.union m (Map.fromList (let ss = zipWith (\(l,h) s2 -> (l, liveHefty h m s2)) bs (tail (map snd ss) ++ [s0]) in ss))
+  live (Jmp l) m _ = fromMaybe Set.empty (Map.lookup l m)
+
+liveHefty :: Live f => HeftyS f a -> Map Label (Set (Either Reg (Name Val))) -> Set (Either Reg (Name Val)) -> Set (Either Reg (Name Val))
+liveHefty = undefined
+
 
 -- Assign Homes
 
@@ -353,10 +370,9 @@ instance Patch X86Cond where
 
 instance Patch Block where
   getAccessType _ = Other
-  patch sub m (Blocks b bs) = do
-    b' <- flush (patchHeftyS m b)
+  patch sub m (Blocks bs) = do
     bs' <- traverse (traverse (flush . patchHeftyS m)) bs
-    sendSubR sub $ Blocks b' bs'
+    sendSubR sub $ Blocks bs'
   patch sub _ (Jmp l) = sendSubR sub $ Jmp l
 
 patchHeftyS :: forall h t a. (Patch h, Fresh < t, X86 << h, AlphaEffect h, Alpha a) => NameMap (Const AccessType) -> HeftyS h a -> TL t h a
@@ -419,7 +435,6 @@ preludeAndConclusion varCount x = do
   stackSize <- imm (8 * (varCount + 2 - (varCount `mod` 2)))
   globl (L "_main")
   blocks
-    (unI <$> sendC Fresh)
     [ ( L "_start",
         do
           z <- x
@@ -491,7 +506,7 @@ instance Pretty X86Cond where
   prettyVar _ = "()"
 
 instance Pretty Block where
-  prettyOp m (Blocks b bs) = prettyHeftyS m b . foldr (\(L lbl, x) xs -> ((lbl ++ ":\n") ++) . prettyHeftyS m x . xs) id bs
+  prettyOp m (Blocks bs) = foldr (\(L lbl, x) xs -> ((lbl ++ ":\n") ++) . prettyHeftyS m x . xs) id bs
 
   prettyOp _ (Jmp l) = pOp "jmp" [getLabel l]
   prettyVar _ = "()"
