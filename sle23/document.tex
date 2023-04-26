@@ -25,9 +25,28 @@ Rewriting all those lines of code for each new language is very costly.
 It is not a coincidence that all three languages are built on top of mature compiler platforms such as the JVM and LLVM.
 
 However, the interface of these platforms, the intermediate representations (IR), are all monolithic and therefore limited to a single level of abstraction.
-That means that languages often still need to use a separate IR at a different level of abstraction for their own language specific optimizations and transformations.
+That means that languages often still need to use a separate IR at a different level of abstraction for their own language specific transformations and optimizations.
 
-The question we answer in this paper is: How can we design a compiler platform 
+How can we design a compiler platform which allows for maximum reuse across a large variety of programming languages?
+
+The approach we present is based on ideas that have a long history in the literature, namely denotational semantics, monads, and algebraic effects.
+It is no coincidence that the theory of programming language semantics plays a role in our compiler framework, because compilation is essentially a way of giving a semantics to a programming language.
+Monads and algebraic effects are related concepts that make it possible to define denotational semantics in a modular way.
+
+Using a monadic intermediate representation has been a successful research direction (Moggi's "Monads and Effects" has many references, and https://www.habit-lang.org/ uses a monadic intermediate language MIL)
+
+% Moggi later introduced monads and monad morphisms to enable the modular definition of denotational semantics.
+% Plotkin and Power presented a more ergonomic alternative to monad morphisms which just considered abstract algebraic effect interfaces.
+% Plotkin and Pretnar made it possible to define practical programs in this paradigm of algebraic effects by introducing handlers which give semantics to the abstract operations of algebraic effects.
+% Wu, Schrijvers, and Hinze observed that some language constructs such as exception catching did not fit into the algebraic effect framework and proposed a framework for more general scoped effects that does support exceptions.
+% Van den Berg, Schrijvers, Bach Poulsen, and Wu observe yet more language constructs which do not fit into the algebraic effect framework and not even in the scoped effect framework.
+%  They introduce latent effects which are more general still.
+% 
+% Denotational semantics is about defining the meaning of programs by mapping the programs onto mathematical objects.
+% Strachey's original school of thought exclusively used the lambda calculus the mathematical object to map programs onto, even before Scott proved that the lambda calculus is really a mathematical object. 
+% Moggi's monads allow one to abstract over common patterns in these mappings which makes it easier to define the mapping.
+% Monad morphisms allow for combining different monads in the same mapping, making the mapping modular. 
+
 
 \begin{itemize}
   \item What are the main ideas behind this paper?
@@ -37,9 +56,9 @@ The question we answer in this paper is: How can we design a compiler platform
 Concretely, our contributions are:
 \begin{itemize}
   \item We show how to build a modular compiler from a small language to a subset of X86 in Section~\ref{sec:simple-lang}.
-  \item We demonstrate analyses and transformation  over our modular IR in Section~\ref{sec:analysis}.
+  \item We demonstrate analyses and transformation over our modular IR in Section~\ref{sec:analysis}.
   \item We demonstrate the modularity of our approach by extending our compiler with conditionals and loops in Section~\ref{sec:cond-loops}.
-  \item We evaluate our approach in Section~\ref{sec:evaluation}
+  \item We evaluate our approach by compiling a suite of example programs and observing the behavior of the resulting binaries in Section~\ref{sec:evaluation}
 \end{itemize}
 
 \section{Effects and Handlers (3 page)} \label{sec:effects-handlers}
