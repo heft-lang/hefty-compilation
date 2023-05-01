@@ -29,24 +29,34 @@ That means that languages often still need to use a separate IR at a different l
 
 How can we design a compiler platform which allows for maximum reuse across a large variety of programming languages?
 
+The most important aspect of a compiler framework is the intermediate representation(s).
+An intermediate representation is the data structure that is used by the compiler to represent programs.
+
 The approach we present is based on ideas that have a long history in the literature, namely denotational semantics, monads, and algebraic effects.
 It is no coincidence that the theory of programming language semantics plays a role in our compiler framework, because compilation is essentially a way of giving a semantics to a programming language.
 Monads and algebraic effects are related concepts that make it possible to define denotational semantics in a modular way.
 
-Using a monadic intermediate representation has been a successful research direction (Moggi's "Monads and Effects" has many references, and https://www.habit-lang.org/ uses a monadic intermediate language MIL)
+
 
 % Moggi later introduced monads and monad morphisms to enable the modular definition of denotational semantics.
 % Plotkin and Power presented a more ergonomic alternative to monad morphisms which just considered abstract algebraic effect interfaces.
 % Plotkin and Pretnar made it possible to define practical programs in this paradigm of algebraic effects by introducing handlers which give semantics to the abstract operations of algebraic effects.
 % Wu, Schrijvers, and Hinze observed that some language constructs such as exception catching did not fit into the algebraic effect framework and proposed a framework for more general scoped effects that does support exceptions.
 % Van den Berg, Schrijvers, Bach Poulsen, and Wu observe yet more language constructs which do not fit into the algebraic effect framework and not even in the scoped effect framework.
-%  They introduce latent effects which are more general still.
+% They introduce latent effects which are more general still.
 % 
 % Denotational semantics is about defining the meaning of programs by mapping the programs onto mathematical objects.
 % Strachey's original school of thought exclusively used the lambda calculus the mathematical object to map programs onto, even before Scott proved that the lambda calculus is really a mathematical object. 
 % Moggi's monads allow one to abstract over common patterns in these mappings which makes it easier to define the mapping.
 % Monad morphisms allow for combining different monads in the same mapping, making the mapping modular. 
 
+Directions (roughly in order of difficulty):
+\begin{enumerate}
+  \item Ergonomic IR for education. Requires contrasting with nanopass and Siek's book. Prior work: Nanopass compilation for education.
+  \item Modular IR for reusability. Requires nontrivial compilers for multiple languages sharing many components. Prior work: Bridging the Gulf
+  \item Efficient IR for optimizations. Requires efficient implementations of optimizations. Prior work: Compiling with Continuations, or without. Whatever!
+  \item Formal Verification. Requires proofs of correctness of compilation. Prior work: Interaction Trees.
+\end{enumerate}
 
 \begin{itemize}
   \item What are the main ideas behind this paper?
@@ -63,7 +73,7 @@ Concretely, our contributions are:
 
 \section{Effects and Handlers (3 page)} \label{sec:effects-handlers}
 
-In this section we show what effects and handlers are and how they can be used in the context of compilers.
+In this section we explain what effects and handlers are and show how they can be used in the context of compilers.
 
 \begin{itemize}
   \item Keep high level
@@ -109,6 +119,7 @@ In this section we evaluate the correctness of our compilers.
   \item MLIR
   \item nanopass compilation
   \item Hefty Algebras
+  \item Using a monadic intermediate representation has been a successful research direction (Benton's, Hughes', and Moggi's "Monads and Effects" has many references, and https://www.habit-lang.org/ uses a monadic intermediate language MIL)
 \end{itemize}
 
 \section{Conclusion and Future Work(1/2 page)} \label{sec:conclusion}
