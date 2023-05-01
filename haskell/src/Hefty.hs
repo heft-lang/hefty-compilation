@@ -284,7 +284,7 @@ weakenR sub m = do
       OpS op v k -> OpS (hmap go (sub op)) v (go k)
 
 sendR :: (Fresh < g, f << h) => f (HeftyS h) (Name a) -> TL g h (Name a)
-sendR x = do I n <- sendC Fresh; TL (pure (OpS (injH x) n (ReturnS n)))
+sendR x = do I n <- sendC Fresh; lift (OpS (injH x) n (ReturnS n))
 
 sendSubR :: (Fresh < g) => (forall m x. f m x -> h m x) -> f (HeftyS h) (Name a) -> TL g h (Name a)
 sendSubR sub x = do I n <- sendC Fresh; TL (pure (OpS (sub x) n (ReturnS n)))
