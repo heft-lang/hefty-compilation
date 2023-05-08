@@ -3,8 +3,8 @@ all: build/ build/output.pdf
 build/:
 	mkdir  -p build
 
-build/output.tex: document.tex
-	lhs2tex document.tex -o build/output.tex
+build/output.tex: document.lhs
+	lhs2tex document.lhs -o build/output.tex
 	sed -i '' 's/\\usepackage{amssymb}//' build/output.tex
 
 build/output.pdf: build/output.tex
