@@ -25,7 +25,7 @@ Effects and handlers can be used to build interpreters from off-the-shelf langua
 To avoid interpretive overhead we are also interested in implementing compilers for languages defined this way.
 We show how effects and handlers can be used as intermediate representations for producing efficient machine code.
 
-\todo[inline]{There is a lot of literature on converting interpreters to abstract machines (and then compilers?) and partial evaluation (Futamura). Should I mention that here?}
+% \todo[inline]{There is a lot of literature on converting interpreters to abstract machines (and then compilers?) and partial evaluation (Futamura). Should I mention that here?}
 
 \todo[inline]{Transition from last paragraph to the following.}
 
@@ -55,7 +55,7 @@ for example as follows:
 < eval env (Let v x y) = eval (insert v (eval env x) env) y
 < eval env (Var v) = lookup v env
 
-\todo[inline]{Aren't variables part of the values that can be returned, e.g. |data Value = VNum Int || VVar String|? Do we need to change this code?}
+% \todo[inline]{Aren't variables part of the values that can be returned, e.g. |data Value = VNum Int || VVar String|? Do we need to change this code?}
 
 Even the cases that do not deal with the environment still need to take the environment as an argument and pass it to recursive calls.
 
@@ -73,6 +73,7 @@ Using effects we can avoid this problem and write our interpreter as two separat
 %format handler = "\mathbf{handler}"
 %format |-> = "\mapsto"
 %format handle = "\mathbf{handle}"
+%format handled = "\mathbf{handled}"
 %format with = "\mathbf{with}"
 %format let = "\mathit{let}"
 
@@ -80,10 +81,10 @@ Using effects we can avoid this problem and write our interpreter as two separat
 % <
 % < eval_Arith : L_Arith (Int ! D) -> Int ! D
 < eval_Arith (Num n) = return n
-< eval_Arith (Plus mx my) = do
-<   x <- mx
-<   y <- my
-<   return x + y
+< eval_Arith (Plus x y) = do
+<   x' <- eval x
+<   y' <- eval y
+<   return x' + y'
 % <
 % < data L_Let a = Let String a a | Var String
 % <
@@ -92,9 +93,9 @@ Using effects we can avoid this problem and write our interpreter as two separat
 % <   local : (r -> r) -> a ! Reader r, D -> a ! Reader r, D
 % <
 % < eval_Let : L_Let (Int ! Reader Env, D) -> Int ! Reader Env, D
-< eval_Let (Let v mx my) = do
-<   x <- mx
-<   local (insert v x) my
+< eval_Let (Let v x y) = do
+<   x' <- eval x
+<   local (insert v x') y
 < eval_Let (Var v) = asks (lookup v)
 
 % <
@@ -115,25 +116,30 @@ The effects framework allows us to transform our definitional interpreter gradua
 First we need to abstract from concrete functions in the defining language, such as |+|, |insert|, and |lookup|.
 
 < eval_Arith (Num n) = return n
-< eval_Arith (Plus mx my) = do
-<   x <- mx
-<   y <- my
+< eval_Arith (Plus x y) = do
+<   x' <- eval x
+<   y' <- eval y
 <   plus x y
 <
-< eval_Let (Let v mx my) = do
-<   x <- mx
-<   let v x my
+< eval_Let (Let v x y) = do
+<   x' <- eval x
+<   let v x' y
 < eval_Let (Var v) = var v
 
 Now our defining language is just the effect system itself.
 
-\todo[inline]{
-At this point there are two variable binding mechanisms:
-the monadic bindings |x <- mx|, and the |let| and |var| operations.
-I could try to merge them, but then I'm afraid I'll be mixing the defining and the defined language.
-Alternatively, I could try to make the |let| and |var| mechanism more first class.
-Neither really sounds easy or elegant.
-}
+\todo[inline]{Explain roughly how we will compile the program from this point on.}
+
+% \todo[inline]{
+% At this point there are two variable binding mechanisms:
+% the monadic bindings |x <- mx|, and the |let| and |var| operations.
+% I could try to merge them, but then I'm afraid I'll be mixing the defining and the defined language.
+% Alternatively, I could try to make the |let| and |var| mechanism more first class.
+% Neither really sounds easy or elegant.
+% ===>
+% We can inline the let bindings, because they are just binding values, so we won't get inefficient duplicate work.
+% }
+
 
 % OLD STORY:
 % Modern compilers for mature programming languages commonly consist of hundreds of thousands to tens of millions lines of code.
@@ -168,18 +174,18 @@ Neither really sounds easy or elegant.
 % Moggi's monads allow one to abstract over common patterns in these mappings which makes it easier to define the mapping.
 % Monad morphisms allow for combining different monads in the same mapping, making the mapping modular. 
 
-Directions (roughly in order of difficulty):
-\begin{enumerate}
-  \item Ergonomic IR for education. Requires contrasting with nanopass and Siek's book. Prior work: Nanopass compilation for education.
-  \item Modular IR for reusability. Requires nontrivial compilers for multiple languages sharing many components. Prior work: Bridging the Gulf
-  \item Efficient IR for optimizations. Requires efficient implementations of optimizations. Prior work: Compiling with Continuations, or without. Whatever!
-  \item Formal Verification. Requires proofs of correctness of compilation. Prior work: Interaction Trees.
-\end{enumerate}
+% Directions (roughly in order of difficulty):
+% \begin{enumerate}
+%   \item Ergonomic IR for education. Requires contrasting with nanopass and Siek's book. Prior work: Nanopass compilation for education.
+%   \item Modular IR for reusability. Requires nontrivial compilers for multiple languages sharing many components. Prior work: Bridging the Gulf
+%   \item Efficient IR for optimizations. Requires efficient implementations of optimizations. Prior work: Compiling with Continuations, or without. Whatever!
+%   \item Formal Verification. Requires proofs of correctness of compilation. Prior work: Interaction Trees.
+% \end{enumerate}
 
-\begin{itemize}
-  \item What are the main ideas behind this paper?
-  \item Why is it different from previous work?
-\end{itemize}
+% \begin{itemize}
+%   \item What are the main ideas behind this paper?
+%   \item Why is it different from previous work?
+% \end{itemize}
 
 Concretely, our contributions are:
 \begin{itemize}
@@ -189,19 +195,63 @@ Concretely, our contributions are:
   \item We evaluate our approach by compiling a suite of example programs and observing the behavior of the resulting binaries in Section~\ref{sec:evaluation}
 \end{itemize}
 
-\section{Effects and Handlers (3 page)} \label{sec:effects-handlers}
+\section{Effects and Handlers (3 pages)} \label{sec:effects-handlers}
 
-In this section we explain what effects and handlers are and show how they can be used in the context of compilers.
+In this section we explain what effects and handlers are and show how they can be used to define the semantcis of programming languages.
 
-\begin{itemize}
-  \item Keep high level
-  \item Explain what the signatures are
-  \item Show example program with high level effect like Arith and I/O and an equivalent program in X86 with variables (show types)
-  \item High level overview of the whole approach
-  \item Show effectful definitional interpreters
-  \item Foreshadow reuse and other nice properties by using interpreters over multiple passes (maybe even full pipeline)
-  \item (higher order functions would be nice)
-\end{itemize}
+In the introduction we have shown code snippets in a language that is very similar to Haskelll.
+And indeed effects systems can be embedded in Haskell, but we have conveniently left out the effect  definitions and types because they quickly become difficult to understand.
+Still, we want to fully explain how effect definitions work and what their types are so we have opted to use a custom lightweight syntax for effects.
+
+\subsection{Operations}
+
+At the center of effects are the effect operations.
+In the introduction we have seen the operations |local| and |asks| which could be given the following signatures.
+
+< effect Reader r where
+<   asks : (r -> a) -> a ! Reader r 
+<   local : (r -> r) -> a ! Reader r -> a ! Reader r
+
+\todo[inline]{Explain the above definition syntax.}
+
+\subsection{Laws}
+
+Furthermore, we can impose laws on these effect operations such as the following laws.
+\begin{align*}
+| do _ <- asks f; k | &= | k | \\
+| do x <- asks f; y <- asks f; k x y | & = | do x <- asks f; k x x | \\
+| local f (asks g) | & = | asks (g . f) | \\
+| local f (return x) | & = | return x |
+\end{align*}
+
+These laws restrict the possible implementations we can give these operations.
+In other words, they specify parts of the semantics of the operations.
+Using these laws we can reason about programs written using effect operations whithout knowing their implementation details.
+
+\subsection{Handlers}
+
+Eventually, we do need to give the implementation details to be able to actually run our programs.
+
+< hReader r = {
+<   asks f; k     |-> k (f r)
+<   local f m; k  |-> do
+<     x <- m handled with hReader (f r)
+<     k x
+< }
+
+\todo[inline]{Show an example of running this handler.}
+
+\todo[inline]{Show an example of a handler that transforms the program from one IR to the next.}
+
+% \begin{itemize}
+%   \item Keep high level
+%   \item Explain what the signatures are
+%   \item Show example program with high level effect like Arith and I/O and an equivalent program in X86 with variables (show types)
+%   \item High level overview of the whole approach
+%   \item Show effectful definitional interpreters
+%   \item Foreshadow reuse and other nice properties by using interpreters over multiple passes (maybe even full pipeline)
+%   \item (higher order functions would be nice)
+% \end{itemize}
 
 \section{Syntactic Representation of Free Monads (1 page)}
   
