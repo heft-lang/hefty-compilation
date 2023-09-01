@@ -31,7 +31,7 @@ data L v
   | LSub (L v) (L v)
   | LNeg (L v)
   | LRead
-  | LLet (L v) (v -> L v)
+  | LLet (Name Val) (L v) (L v)
   | LIf (L v) (L v) (L v)
   | LFalse
   | LTrue
@@ -39,7 +39,7 @@ data L v
   | LNot (L v)
   | LAnd (L v) (L v)
   | LOr (L v) (L v)
-  | LVar v
+  | LVar (Name Val)
 
 -- Denotation
 
@@ -60,9 +60,9 @@ denote = \case
 
   LRead -> read
 
-  LLet x f ->
-    let' (denote x) $ \vx ->
-      denote (f vx)
+  LLet v x y -> do
+    vx <- denote x
+    let' v vx (denote y)
 
   LIf c t f -> do
     dc <- denote c

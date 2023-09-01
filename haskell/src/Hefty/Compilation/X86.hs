@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs, AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DataKinds #-}
 module Hefty.Compilation.X86 where
 
 import Hefty

@@ -197,7 +197,7 @@ Concretely, our contributions are:
 
 \section{Effects and Handlers (3 pages)} \label{sec:effects-handlers}
 
-In this section we explain what effects and handlers are and show how they can be used to define the semantcis of programming languages.
+In this section we explain what effects and handlers are and show how they can be used to define the semantics of programming languages.
 
 In the introduction we have shown code snippets in a language that is very similar to Haskelll.
 And indeed effects systems can be embedded in Haskell, but we have conveniently left out the effect  definitions and types because they quickly become difficult to understand.
@@ -233,8 +233,8 @@ Using these laws we can reason about programs written using effect operations wh
 Eventually, we do need to give the implementation details to be able to actually run our programs.
 
 < hReader r = {
-<   asks f; k     |-> k (f r)
-<   local f m; k  |-> do
+<   x <- asks f; k x     |-> k (f r)
+<   x <- local f m; k x  |-> do
 <     x <- m handled with hReader (f r)
 <     k x
 < }

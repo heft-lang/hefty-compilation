@@ -6,7 +6,7 @@ import Hefty
 import Hefty.Compilation.Common
 
 data Let m a where
-  Let :: m (Name Val) -> Name Val -> m (Name Val) -> Let m (Name Val)
+  Let :: Name Val -> Name Val -> m (Name Val) -> Let m (Name Val)
 
 instance HTraversable Let where
   htraverse f (Let m n b) = (`Let` n) <$> f m <*> f b
